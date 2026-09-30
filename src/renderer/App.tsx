@@ -13,6 +13,7 @@ const SKORKI = [
   { id: 'pony', nazwa: 'Pony' },
   { id: 'nord', nazwa: 'Nord' },
   { id: 'speed', nazwa: 'Speed Night' },
+  { id: 'denim', nazwa: 'Dżins' },
 ] as const;
 
 const SKORKA_KLUCZ = 'katalog.skorka';
@@ -208,6 +209,11 @@ export default function App() {
   }, [families]);
 
   return (
+    <div className="pocket">
+      <div className="pocket-face">
+        <div className="pocket-fabric" />
+        <span className="pocket-rivet l" />
+        <span className="pocket-rivet r" />
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
@@ -409,6 +415,8 @@ export default function App() {
           </>
         )}
       </main>
+    </div>
+      </div>
     </div>
   );
 }

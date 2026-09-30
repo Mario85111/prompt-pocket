@@ -134,7 +134,7 @@ rozróżnia „model myśli" od „model pisze" — sam licznik znaków niczego 
 
 ## Skórki
 
-Siedem motywów, przełącznik na dole panelu bocznego; wybór zapamiętuje się między uruchomieniami
+Osiem motywów, przełącznik na dole panelu bocznego; wybór zapamiętuje się między uruchomieniami
 (`localStorage`, z awaryjnym powrotem do domyślnego, gdy magazyn przeglądarki zawiedzie).
 
 | skórka | charakter |
@@ -146,11 +146,14 @@ Siedem motywów, przełącznik na dole panelu bocznego; wybór zapamiętuje się
 | **Pony** | pastele, grube zaokrąglenia, różowy cień |
 | **Nord** | chłodny grafit, przygaszony błękit — spokojny motyw ciemny |
 | **Speed Night** | nocny asfalt, neon cyjan i magenta |
+| **Dżins** | sprany indygo, złota nitka w szwie, miedziane nity |
 
 Motyw steruje nie tylko kolorem, ale i kształtem: grubością obramowania, zaokrągleniem, cieniem,
 krojem pisma, wersalikami i reakcją na kliknięcie. Wszystko siedzi w zmiennych w
 [themes.css](src/renderer/themes.css); [styles.css](src/renderer/styles.css) nie zawiera ani jednego
-koloru wpisanego wprost. Dodanie skórki to jeden blok zmiennych plus wpis na liście w `App.tsx`.
+koloru wpisanego wprost. Okno ma kształt tylnej kieszeni od dżinsów (ścięte górne rogi, szpic na dole, szew i dwa nity) w każdej
+skórce; kolory kieszeni skórka może nadpisać zmiennymi `--desk`, `--face`, `--stitch` i `--rivet`.
+Dodanie skórki to jeden blok zmiennych plus wpis na liście w `App.tsx`.
 
 ## Testy
 

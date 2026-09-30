@@ -7,17 +7,95 @@
 
 * { box-sizing: border-box; }
 
+/* ---------- kształt: tylna kieszeń od dżinsów ----------
+   Okno to kieszeń: prosty górny rąbek z dwoma nitami, ścięte górne rogi i
+   ostry szpic na dole. Kształt to jeden wielobok (clip-path) użyty w kilku
+   warstwach o różnym wcięciu: obrys, tkanina, szew, wnętrze. Kolory biorą się
+   ze zmiennych — skórka może nadpisać --desk, --face, --stitch i --rivet,
+   a bez nich kieszeń dziedziczy barwy motywu. */
+
+:root {
+  --v: clamp(44px, 9vh, 84px); /* głębokość szpica */
+  --c: 14px;                   /* ścięcie górnych rogów */
+  --pocket-shape: polygon(
+    var(--c) 0, calc(100% - var(--c)) 0, 100% var(--c),
+    100% calc(100% - var(--v)), 50% 100%, 0 calc(100% - var(--v)), 0 var(--c)
+  );
+}
+
 body {
   margin: 0;
-  background: var(--bg);
-  background-image: var(--bg-image);
-  background-attachment: fixed;
+  overflow: hidden;
+  background: var(--desk, color-mix(in srgb, var(--bg) 80%, var(--ink)));
+  background-image: var(--desk-image, none);
   color: var(--ink);
   font: var(--font);
   font-weight: var(--weight-normal);
 }
 
-.app { display: grid; grid-template-columns: 330px 1fr; height: 100vh; }
+/* Cień rzuca rodzic: clip-path obcina własny box-shadow elementu. */
+.pocket {
+  position: fixed;
+  inset: 14px;
+  filter: drop-shadow(var(--shadow));
+}
+
+.pocket-face {
+  position: absolute;
+  inset: 0;
+  clip-path: var(--pocket-shape);
+  /* Obrys: tło kontenera w kolorze linii, tkanina wcięta o grubość obramowania. */
+  background: var(--line);
+}
+
+.pocket-face::before,
+.pocket-face::after,
+.pocket-fabric {
+  position: absolute;
+  clip-path: var(--pocket-shape);
+  content: '';
+}
+
+/* tkanina z rąbkiem i nitami */
+.pocket-fabric { inset: var(--bw-thin); background-color: var(--face, var(--panel-2)); }
+
+.pocket-face::before {
+  z-index: 1;
+  inset: 30px 8px 8px;
+  /* Przerywane ukośne paski przecięte wąskim pierścieniem dają ściegi na każdym boku. */
+  background: repeating-linear-gradient(45deg, var(--stitch, var(--ink)) 0 6px, transparent 6px 11px);
+}
+
+.pocket-face::after {
+  z-index: 2;
+  inset: 32px 10px 10px;
+  background-color: var(--bg);
+  background-image: var(--bg-image);
+}
+
+.pocket-rivet {
+  position: absolute;
+  z-index: 3;
+  top: 9px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--panel) 70%, transparent) 0 15%, transparent 40%), var(--rivet, var(--accent));
+  box-shadow: 0 0 0 1px var(--line);
+}
+.pocket-rivet.l { left: 24px; }
+.pocket-rivet.r { right: 24px; }
+
+.app {
+  position: absolute;
+  z-index: 4;
+  inset: 34px 12px 10px;
+  /* Szpic odcina dolne rogi, więc treść kończy się nad nim. */
+  padding-bottom: var(--v);
+  display: grid;
+  grid-template-columns: 330px 1fr;
+  height: auto;
+}
 
 /* ---------- panel boczny ---------- */
 
