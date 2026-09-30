@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="denim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a66a0"/>
+      <stop offset="1" stop-color="#1f3f6e"/>
+    </linearGradient>
+    <pattern id="twill" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="14" height="3" fill="#ffffff" fill-opacity="0.07"/>
+    </pattern>
+    <radialGradient id="rivet" cx="35%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#f1b98a"/>
+      <stop offset="0.55" stop-color="#c8793a"/>
+      <stop offset="1" stop-color="#8a4a1c"/>
+    </radialGradient>
+  </defs>
+
+  <!-- kartka z promptem wystaje z kieszeni -->
+  <g transform="rotate(-6 512 250)">
+    <rect x="318" y="96" width="392" height="290" rx="34" fill="#f4f7fb" stroke="#0d1b30" stroke-width="14"/>
+    <rect x="368" y="152" width="170" height="26" rx="13" fill="#f0a83c"/>
+    <rect x="368" y="204" width="292" height="22" rx="11" fill="#9db4d1"/>
+    <rect x="368" y="252" width="230" height="22" rx="11" fill="#9db4d1"/>
+  </g>
+
+  <!-- kieszeń: ścięte górne rogi, szpic na dole -->
+  <path id="shape" d="M232 300 H792 L852 360 V700 L512 944 L172 700 V360 Z"
+        fill="url(#denim)" stroke="#0d1b30" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M232 300 H792 L852 360 V700 L512 944 L172 700 V360 Z" fill="url(#twill)"/>
+
+  <!-- rąbek -->
+  <path d="M172 388 H852" stroke="#f0b24a" stroke-width="10" stroke-dasharray="26 18" stroke-linecap="round"/>
+  <!-- szew wokół -->
+  <path d="M212 428 H812 V690 L512 896 L212 690 Z" fill="none" stroke="#f0b24a" stroke-width="10"
+        stroke-dasharray="26 18" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- nity -->
+  <circle cx="240" cy="344" r="22" fill="url(#rivet)" stroke="#0d1b30" stroke-width="6"/>
+  <circle cx="784" cy="344" r="22" fill="url(#rivet)" stroke="#0d1b30" stroke-width="6"/>
+</svg>

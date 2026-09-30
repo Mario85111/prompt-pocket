@@ -72,6 +72,8 @@ function createWindow(): void {
     // (Matrix, Speed Night) mignąłby jasny prostokąt w kolorze domyślnego motywu.
     show: false,
     title: 'Prompt Pocket',
+    // Windows bierze ikonę z exe; okno na Linuksie potrzebuje jej z pliku (build/ jest w paczce).
+    icon: path.join(__dirname, '../../build/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

@@ -37,12 +37,14 @@
     "appId": "pl.promptpocket.app",
     "productName": "Prompt Pocket",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**",
       "dist-electron/**",
-      "package.json"
+      "package.json",
+      "build/icon.png"
     ],
     "win": {
       "target": [
