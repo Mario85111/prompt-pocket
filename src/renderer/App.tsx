@@ -48,6 +48,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [view, setView] = useState<'katalog' | 'kreator'>('katalog');
   const [skorka, setSkorka] = useState(wczytajSkorke);
+  const [menu, setMenu] = useState<'nowa' | 'ustawienia' | null>(null);
+  const barRef = useRef<HTMLElement | null>(null);
 
   const timer = useRef<number | null>(null);
   const pending = useRef<{ relPath: string; body: string } | null>(null);
@@ -142,6 +144,7 @@ export default function App() {
     await flush();
     const family = await window.catalog.createFamily(title);
     setNewTitle('');
+    setMenu(null);
     await refresh();
     if (family.versions[0]) await openVersion(family.versions[0]);
   }
@@ -199,6 +202,23 @@ export default function App() {
     await refresh();
   }
 
+  /* Menu rozwijane zamyka kliknięcie poza paskiem i Escape. */
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: MouseEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) setMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenu(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
+
   const stats = useMemo(() => {
     const versions = families.flatMap((f) => f.versions);
     return {
@@ -215,12 +235,11 @@ export default function App() {
         <span className="pocket-rivet l" />
         <span className="pocket-rivet r" />
     <div className="app">
-      <aside className="sidebar">
+      <header className="topbar" ref={barRef}>
         <div className="brand">
           <h1>Prompt Pocket</h1>
           <p className="muted">
-            {stats.families} rodzin · {stats.versions} wersji ·{' '}
-            {stats.multiVersion} wielowersyjnych
+            {stats.families} rodzin · {stats.versions} wersji · {stats.multiVersion} wielowersyjnych
           </p>
         </div>
 
@@ -233,47 +252,91 @@ export default function App() {
           </button>
         </div>
 
-        {/* Szukanie przeszukuje to, co jest — stąd zrośnięte z listą poniżej. */}
-        <div className="search-row">
-          <span className="tag">Szukaj</span>
-          <input
-            className="search"
-            value={query}
-            placeholder="w treści i tytułach…"
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && (
-            <button className="clear" title="Wyczyść" onClick={() => setQuery('')}>
-              ×
-            </button>
+        {/* Szukanie przeszukuje to, co jest — stąd tylko w katalogu, zrośnięte z listą trafień. */}
+        {view === 'katalog' ? (
+          <div className="search-row">
+            <span className="tag">Szukaj</span>
+            <input
+              className="search"
+              value={query}
+              placeholder="w treści i tytułach…"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button className="clear" title="Wyczyść" onClick={() => setQuery('')}>
+                ×
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grow" />
+        )}
+
+        <div className="menu-host">
+          <button
+            className={menu === 'nowa' ? 'menu-btn open' : 'menu-btn'}
+            onClick={() => setMenu(menu === 'nowa' ? null : 'nowa')}
+          >
+            + Nowa rodzina
+          </button>
+          {menu === 'nowa' && (
+            <div className="popover">
+              <span className="tag wide">Nazwa rodziny</span>
+              <input
+                autoFocus
+                value={newTitle}
+                placeholder="np. Audyt UX"
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void createFamily();
+                }}
+              />
+              <button onClick={() => void createFamily()} disabled={!newTitle.trim()}>
+                Załóż
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Zakładanie rodziny tworzy coś nowego — osobna kafla, nie kolejne pole w rzędzie. */}
-        <div className="new-family">
-          <div className="tag wide">Nowa rodzina</div>
-          <div className="new-family-body">
-            <input
-              value={newTitle}
-              placeholder="Nazwa, np. Audyt UX"
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void createFamily();
-              }}
-            />
-            <button onClick={() => void createFamily()} disabled={!newTitle.trim()}>
-              Załóż
-            </button>
-            <button
-              className="ghost"
-              title="Wczytaj pliki .md — każdy zakłada osobną rodzinę"
-              onClick={() => void importFiles()}
-            >
-              Importuj
-            </button>
-          </div>
-        </div>
+        <button
+          className="menu-btn"
+          title="Wczytaj pliki .md — każdy zakłada osobną rodzinę"
+          onClick={() => void importFiles()}
+        >
+          Importuj .md
+        </button>
 
+        <div className="menu-host">
+          <button
+            className={menu === 'ustawienia' ? 'menu-btn open' : 'menu-btn'}
+            onClick={() => setMenu(menu === 'ustawienia' ? null : 'ustawienia')}
+          >
+            Ustawienia ▾
+          </button>
+          {menu === 'ustawienia' && (
+            <div className="popover right">
+              <div className="skins">
+                <span className="tag">Skórka</span>
+                <select value={skorka} onChange={(e) => setSkorka(e.target.value)}>
+                  {SKORKI.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nazwa}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button className="link" onClick={() => void window.catalog.revealRoot()}>
+                Otwórz katalog na dysku
+              </button>
+              <code title={root}>{root}</code>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <div className={view === 'katalog' ? 'workspace' : 'workspace solo'}>
+        {view === 'katalog' && (
+          <aside className="sidebar">
         <nav className="families">
           {hits !== null && (
             <>
@@ -335,24 +398,8 @@ export default function App() {
               </div>
             ))}
         </nav>
-
-        <footer className="root">
-          <div className="skins">
-            <span className="tag">Skórka</span>
-            <select value={skorka} onChange={(e) => setSkorka(e.target.value)}>
-              {SKORKI.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nazwa}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button className="link" onClick={() => void window.catalog.revealRoot()}>
-            Otwórz katalog na dysku
-          </button>
-          <code title={root}>{root}</code>
-        </footer>
-      </aside>
+          </aside>
+        )}
 
       <main className="editor">
         {view === 'kreator' && (
@@ -415,6 +462,7 @@ export default function App() {
           </>
         )}
       </main>
+      </div>
     </div>
       </div>
     </div>

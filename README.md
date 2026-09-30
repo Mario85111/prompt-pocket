@@ -34,11 +34,9 @@ npm run dist
 
 SCOPE zakładał `Documents`, ale folder Dokumenty jest tu przekierowany do OneDrive, co łamie
 ograniczenie „dane nie opuszczają maszyny" (SCOPE §7). Wygrywa ograniczenie.
-Ścieżkę nadpisuje zmienna `PROMPT_POCKET_ROOT` (stara `KATALOG_PROMPTOW_ROOT` nadal działa).
+Ścieżkę nadpisuje zmienna `PROMPT_POCKET_ROOT`.
 
-Aplikacja nazywała się wcześniej „Katalog Promptów". Przy pierwszym uruchomieniu po zmianie nazwy
-stary katalog `KatalogPromptow` jest przenoszony do `PromptPocket`, a ustawienia (klucze, wybór dostawcy,
-skórka) kopiowane z `%APPDATA%\katalog-promptow` do `%APPDATA%\prompt-pocket` — o ile nowe miejsca są puste.
+Aplikacja startuje pusta — nie zawiera żadnych promptów ani przykładów, a nic nie dociąga ze starych lokalizacji.
 
 Struktura na dysku:
 

@@ -15,53 +15,16 @@ const isDev = process.env.NODE_ENV === 'development';
  * Na tej maszynie folder Dokumenty jest przekierowany do OneDrive, więc te dwa
  * wymagania się wykluczają. Wygrywa ograniczenie, nie preferencja: katalog ląduje
  * w profilu użytkownika, poza folderem synchronizowanym. Decyzja do potwierdzenia
- * przez product ownera — nadpisanie zmienną PROMPT_POCKET_ROOT (dawniej KATALOG_PROMPTOW_ROOT).
+ * przez product ownera — nadpisanie zmienną PROMPT_POCKET_ROOT.
  */
-async function resolveRoot(): Promise<string> {
-  const override = process.env.PROMPT_POCKET_ROOT || process.env.KATALOG_PROMPTOW_ROOT;
+function resolveRoot(): string {
+  const override = process.env.PROMPT_POCKET_ROOT;
   if (override) return override;
 
   const documents = app.getPath('documents');
   const syncedToCloud = /[\\/]OneDrive([\\/]|$)/i.test(documents);
-  const base = syncedToCloud ? app.getPath('home') : documents;
-  const root = path.join(base, 'PromptPocket');
 
-  // Aplikacja nazywała się kiedyś „Katalog Promptów". Stary katalog przenosimy raz,
-  // przy pierwszym uruchomieniu po zmianie nazwy — i tylko gdy nowego jeszcze nie ma,
-  // żeby niczego nie nadpisać.
-  const legacy = path.join(base, 'KatalogPromptow');
-  if (!(await exists(root)) && (await exists(legacy))) {
-    await fs.rename(legacy, root);
-  }
-  return root;
-}
-
-async function exists(p: string): Promise<boolean> {
-  return fs.access(p).then(() => true, () => false);
-}
-
-/**
- * Katalog danych aplikacji (klucze, wybór dostawcy, skórka) wynika z pola `name`
- * w package.json — zmiana nazwy przeniosła go z `katalog-promptow` do `prompt-pocket`.
- * Kopiujemy ustawienia ze starego miejsca, jeśli nowe jest jeszcze puste. Klucze są
- * zaszyfrowane DPAPI dla tego samego użytkownika systemu, więc kopia pozostaje czytelna.
- */
-async function migrateLegacyUserData(): Promise<void> {
-  const current = app.getPath('userData');
-  const legacy = path.join(app.getPath('appData'), 'katalog-promptow');
-  if (current === legacy || !(await exists(legacy))) return;
-  if (await exists(path.join(current, 'provider.json'))) return;
-
-  await fs.mkdir(current, { recursive: true });
-  for (const entry of await fs.readdir(legacy)) {
-    if (/^provider(-key-.+\.bin|\.json)$/.test(entry) || entry === 'Local Storage') {
-      await fs.cp(path.join(legacy, entry), path.join(current, entry), {
-        recursive: true,
-        force: false,
-        errorOnExist: false,
-      });
-    }
-  }
+  return path.join(syncedToCloud ? app.getPath('home') : documents, 'PromptPocket');
 }
 
 function createWindow(): void {
@@ -93,8 +56,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  await migrateLegacyUserData();
-  store.setRoot(await resolveRoot());
+  store.setRoot(resolveRoot());
   // Kosz systemowy zamiast kasowania na amen — usunięcie promptu ma być odwracalne.
   store.setRemover((absPath) => shell.trashItem(absPath));
   await store.ensureRoot();
