@@ -1,0 +1,257 @@
+/* ------------------------------------------------------------------
+   Skórki. Każda ustawia ten sam zestaw zmiennych, więc reszta arkusza
+   nie wie, w jakim jest motywie — zmienia się wygląd, nie układ.
+
+   Poza kolorami motyw steruje też kształtem: grubością obramowania,
+   zaokrągleniem, cieniem, krojem pisma i tym, czy przyciski krzyczą
+   wersalikami. Bez tego wszystkie skórki byłyby brutalizmem w innym kolorze.
+   ------------------------------------------------------------------ */
+
+:root,
+:root[data-theme='brutal'] {
+  --bg: #f4f1e8;
+  --bg-image:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 22px);
+  --panel: #ffffff;
+  /* Drugie tło musi kontrastować z --ink; tu zostało z czasów ciemnego motywu
+     i dawało czarny napis na prawie czarnym przycisku. */
+  --panel-2: #e9e6da;
+  --ink: #0a0a0a;
+  --line: #0a0a0a;
+  --muted: #5c5a52;
+  --accent: #ffd400;
+  --on-accent: #0a0a0a;
+  --accent-2: #3d5afe;
+  --on-accent-2: #ffffff;
+  --ok: #00c853;
+  --warn: #ff9100;
+  --bad: #ff1744;
+  --on-bad: #ffffff;
+
+  --bw: 3px;
+  --bw-thin: 2px;
+  --radius: 0;
+  --shadow: 4px 4px 0 var(--ink);
+  --shadow-sm: 3px 3px 0 var(--ink);
+  --press: translate(3px, 3px);
+
+  --font: 14px/1.45 "Arial Black", "Segoe UI", system-ui, sans-serif;
+  --mono: "Consolas", "Courier New", monospace;
+  --weight-normal: 500;
+  --weight-bold: 900;
+  --caps: uppercase;
+  --track: 0.01em;
+}
+
+/* ---------- matrix: terminal, fosfor, czerń ---------- */
+
+:root[data-theme='matrix'] {
+  --bg: #000600;
+  --bg-image:
+    repeating-linear-gradient(0deg, rgba(0, 255, 102, 0.06) 0 1px, transparent 1px 3px);
+  --panel: #030f06;
+  --panel-2: #041206;
+  --ink: #00ff66;
+  --line: #00993d;
+  --muted: #0a8f45;
+  --accent: #00ff66;
+  --on-accent: #001a08;
+  --accent-2: #00c2ff;
+  --on-accent-2: #001018;
+  --ok: #00ff66;
+  --warn: #d4ff00;
+  --bad: #ff2d2d;
+  --on-bad: #ffffff;
+
+  --bw: 1px;
+  --bw-thin: 1px;
+  --radius: 0;
+  --shadow: 0 0 12px rgba(0, 255, 102, 0.35);
+  --shadow-sm: 0 0 8px rgba(0, 255, 102, 0.25);
+  --press: translateY(1px);
+
+  --font: 13px/1.5 "Consolas", "Courier New", monospace;
+  --mono: "Consolas", "Courier New", monospace;
+  --weight-normal: 400;
+  --weight-bold: 700;
+  --caps: uppercase;
+  --track: 0.08em;
+}
+
+/* ---------- garden: płatki, nie liście — róż, bez, masło, zieleń jako akcent ---------- */
+
+:root[data-theme='garden'] {
+  --bg: #fdf6f2;
+  --bg-image: radial-gradient(circle at 12% 18%, rgba(242, 162, 184, 0.34) 0, transparent 40%),
+    radial-gradient(circle at 82% 14%, rgba(197, 170, 222, 0.32) 0, transparent 38%),
+    radial-gradient(circle at 70% 82%, rgba(255, 214, 122, 0.28) 0, transparent 40%),
+    radial-gradient(circle at 25% 88%, rgba(140, 180, 120, 0.22) 0, transparent 36%);
+  --panel: #fffbf8;
+  --panel-2: #fbeef2;
+  --ink: #43303a;
+  --line: #e0bccb;
+  --muted: #8a6f7c;
+  --accent: #f2a2b8;
+  --on-accent: #40222e;
+  --accent-2: #8bb273;
+  --on-accent-2: #1f2c18;
+  --ok: #6fa86a;
+  --warn: #e8a33d;
+  --bad: #c4566b;
+  --on-bad: #ffffff;
+
+  --bw: 1px;
+  --bw-thin: 1px;
+  --radius: 14px;
+  --shadow: 0 6px 18px rgba(150, 90, 115, 0.16);
+  --shadow-sm: 0 3px 10px rgba(150, 90, 115, 0.13);
+  --press: translateY(1px);
+
+  --font: 14px/1.6 "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --weight-normal: 400;
+  --weight-bold: 600;
+  --caps: none;
+  --track: 0.01em;
+}
+
+/* ---------- apple: jasno, cicho, minimalnie ---------- */
+
+:root[data-theme='apple'] {
+  --bg: #f5f5f7;
+  --bg-image: none;
+  --panel: #ffffff;
+  --panel-2: #fafafc;
+  --ink: #1d1d1f;
+  --line: #d2d2d7;
+  --muted: #86868b;
+  --accent: #0071e3;
+  --on-accent: #ffffff;
+  --accent-2: #0071e3;
+  --on-accent-2: #ffffff;
+  --ok: #1f9d55;
+  --warn: #c77700;
+  --bad: #d70015;
+  --on-bad: #ffffff;
+
+  --bw: 1px;
+  --bw-thin: 1px;
+  --radius: 10px;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --press: scale(0.985);
+
+  --font: 14px/1.5 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --mono: "SF Mono", Consolas, monospace;
+  --weight-normal: 400;
+  --weight-bold: 600;
+  --caps: none;
+  --track: 0;
+}
+
+/* ---------- pony: pastele, cukier, zaokrąglenia ---------- */
+
+:root[data-theme='pony'] {
+  --bg: #fff0f7;
+  --bg-image: radial-gradient(circle at 15% 20%, rgba(255, 183, 222, 0.35) 0, transparent 42%),
+    radial-gradient(circle at 80% 15%, rgba(197, 183, 255, 0.35) 0, transparent 40%),
+    radial-gradient(circle at 60% 85%, rgba(183, 232, 255, 0.35) 0, transparent 45%);
+  --panel: #fffafd;
+  --panel-2: #ffeef7;
+  --ink: #5b3a55;
+  --line: #f0a8cf;
+  --muted: #a6789b;
+  --accent: #ffb7de;
+  --on-accent: #5b3a55;
+  --accent-2: #b39dff;
+  --on-accent-2: #2e2350;
+  --ok: #7fd1a6;
+  --warn: #ffc470;
+  --bad: #ff7aa2;
+  --on-bad: #4a1b2c;
+
+  --bw: 2px;
+  --bw-thin: 2px;
+  --radius: 18px;
+  --shadow: 0 6px 0 rgba(240, 168, 207, 0.55);
+  --shadow-sm: 0 3px 0 rgba(240, 168, 207, 0.5);
+  --press: translateY(3px);
+
+  --font: 14px/1.55 "Comic Sans MS", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --weight-normal: 500;
+  --weight-bold: 700;
+  --caps: none;
+  --track: 0.01em;
+}
+
+/* ---------- nord: chłodny grafit, przygaszony błękit, spokój ---------- */
+
+:root[data-theme='nord'] {
+  --bg: #2e3440;
+  --bg-image: none;
+  --panel: #3b4252;
+  --panel-2: #434c5e;
+  --ink: #eceff4;
+  --line: #4c566a;
+  --muted: #9aa5b8;
+  --accent: #88c0d0;
+  --on-accent: #2e3440;
+  --accent-2: #5e81ac;
+  --on-accent-2: #eceff4;
+  --ok: #a3be8c;
+  --warn: #ebcb8b;
+  --bad: #bf616a;
+  --on-bad: #eceff4;
+
+  --bw: 1px;
+  --bw-thin: 1px;
+  --radius: 8px;
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --press: translateY(1px);
+
+  --font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+  --weight-normal: 400;
+  --weight-bold: 600;
+  --caps: none;
+  --track: 0;
+}
+
+/* ---------- speed: nocny asfalt, neon, prędkość ---------- */
+
+:root[data-theme='speed'] {
+  --bg: #07070d;
+  --bg-image: linear-gradient(180deg, rgba(255, 0, 128, 0.12) 0, transparent 35%),
+    linear-gradient(0deg, rgba(0, 229, 255, 0.12) 0, transparent 30%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 60px);
+  --panel: #10111b;
+  --panel-2: #161826;
+  --ink: #e8ecff;
+  --line: #2b3050;
+  --muted: #8891b8;
+  --accent: #00e5ff;
+  --on-accent: #06121a;
+  --accent-2: #ff0080;
+  --on-accent-2: #ffffff;
+  --ok: #24e08a;
+  --warn: #ffb300;
+  --bad: #ff3860;
+  --on-bad: #ffffff;
+
+  --bw: 1px;
+  --bw-thin: 1px;
+  --radius: 4px;
+  --shadow: 0 0 16px rgba(0, 229, 255, 0.28);
+  --shadow-sm: 0 0 10px rgba(255, 0, 128, 0.25);
+  --press: translateY(1px);
+
+  --font: 13px/1.5 "Segoe UI", "Rajdhani", system-ui, sans-serif;
+  --mono: Consolas, monospace;
+  --weight-normal: 400;
+  --weight-bold: 700;
+  --caps: uppercase;
+  --track: 0.06em;
+}

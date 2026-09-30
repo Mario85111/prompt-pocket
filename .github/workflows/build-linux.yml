@@ -1,0 +1,71 @@
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths-ignore: ['**.md', 'intent/**']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Testy nie używają sieci ani prawdziwych kluczy (atrapy HTTP, katalog tymczasowy).
+      - name: Testy
+        run: npm test
+
+      # AppImage + tar.gz. Nic nie jest publikowane przez electron-buildera.
+      - name: Build (AppImage, tar.gz)
+        run: npm run dist:linux -- --publish never
+
+      # Klucze API zapisuje dopiero użytkownik w aplikacji (keyring systemowy), więc w paczce
+      # nie powinno ich być. Ten krok wywraca build, gdyby jakiś wzorzec klucza się tam znalazł.
+      - name: Sprawdź, że w paczce nie ma kluczy API
+        run: |
+          npx --yes @electron/asar extract release/linux-unpacked/resources/app.asar "$RUNNER_TEMP/asar"
+          if grep -rEIl --exclude-dir=@anthropic-ai "sk-or-v1|sk-proj-|sk-ant-api|AIzaSy" "$RUNNER_TEMP/asar"; then
+            echo "::error::W paczce znaleziono wzorzec klucza API"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prompt-pocket-linux
+          path: |
+            release/*.AppImage
+            release/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    # GitHub Release powstaje tylko przy tagu vX.Y.Z — zwykłe uruchomienia kończą się na artefakcie.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: prompt-pocket-linux
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
