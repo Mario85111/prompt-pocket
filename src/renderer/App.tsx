@@ -5,6 +5,7 @@ import { fillVars, findVars } from '../shared/vars';
 import Creator from './Creator';
 import { errorText, whenUsed } from './format';
 import VarsForm from './VarsForm';
+import logo from '../../build/icon.svg';
 
 const AUTOSAVE_MS = 2000;
 
@@ -336,7 +337,9 @@ export default function App() {
         <span className="pocket-rivet r" />
     <div className="app">
       <header className="topbar" ref={barRef}>
+        {/* Znak, nie przycisk: bez ramki i cienia, żeby nie udawał czegoś do kliknięcia. */}
         <div className="brand">
+          <img src={logo} alt="" width={30} height={30} />
           <h1>Prompt Pocket</h1>
         </div>
 

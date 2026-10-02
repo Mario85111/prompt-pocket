@@ -113,8 +113,22 @@ body {
   border-bottom: var(--bw) solid var(--line);
 }
 
-.topbar .brand { padding: 5px 10px; box-shadow: var(--shadow-sm); white-space: nowrap; }
-.topbar .brand h1 { font-size: 15px; line-height: 1.1; }
+/* Marka w pasku to znak, nie kontrolka: bez tła, ramki i cienia, które mają przyciski obok. */
+.topbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 0;
+  background: none;
+  color: var(--ink);
+  border: none;
+  box-shadow: none;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+.topbar .brand img { display: block; flex: none; }
+.topbar .brand h1 { font-size: 17px; line-height: 1; }
 .topbar .tabs { flex-wrap: nowrap; }
 .topbar .tab { flex: none; padding: 7px 14px; }
 .topbar .search-row { flex: 1 1 180px; min-width: 0; }
