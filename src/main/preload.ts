@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AgentProgress, AgentsApi, CatalogApi, QA } from '../shared/types';
+import type { AgentProgress, AgentsApi, CatalogApi, PocketApi, QA } from '../shared/types';
 
 const catalog: CatalogApi = {
   getRoot: () => ipcRenderer.invoke('catalog:getRoot'),
@@ -10,6 +10,8 @@ const catalog: CatalogApi = {
   setWorkingVersion: (relPath: string) => ipcRenderer.invoke('catalog:setWorkingVersion', relPath),
   saveVersionBody: (relPath: string, body: string) =>
     ipcRenderer.invoke('catalog:saveVersionBody', relPath, body),
+  saveVersionNote: (relPath: string, note: string) =>
+    ipcRenderer.invoke('catalog:saveVersionNote', relPath, note),
   search: (query: string) => ipcRenderer.invoke('catalog:search', query),
   appendVersion: (familySlug: string, body: string) =>
     ipcRenderer.invoke('catalog:appendVersion', familySlug, body),
@@ -41,5 +43,21 @@ const agents: AgentsApi = {
   },
 };
 
+const pocket: PocketApi = {
+  copyAndMarkUsed: (relPath, text) => ipcRenderer.invoke('pocket:copyAndMarkUsed', relPath, text),
+  getShortcut: () => ipcRenderer.invoke('pocket:getShortcut'),
+  getBackup: () => ipcRenderer.invoke('pocket:getBackup'),
+  chooseBackupDir: () => ipcRenderer.invoke('pocket:chooseBackupDir'),
+  setBackupAuto: (auto) => ipcRenderer.invoke('pocket:setBackupAuto', auto),
+  backupNow: () => ipcRenderer.invoke('pocket:backupNow'),
+  hideQuick: () => ipcRenderer.invoke('pocket:hideQuick'),
+  onQuickShown: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on('pocket:quickShown', handler);
+    return () => ipcRenderer.removeListener('pocket:quickShown', handler);
+  },
+};
+
 contextBridge.exposeInMainWorld('catalog', catalog);
 contextBridge.exposeInMainWorld('agents', agents);
+contextBridge.exposeInMainWorld('pocket', pocket);

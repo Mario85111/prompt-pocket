@@ -159,7 +159,7 @@ Dodanie skórki to jeden blok zmiennych plus wpis na liście w `App.tsx`.
 npm test
 ```
 
-93 testy w 10 plikach, wszystkie bez sieci: dostawcy podmieniani na lokalne atrapy HTTP, magazyn
+131 testów w 11 plikach, wszystkie bez sieci: dostawcy podmieniani na lokalne atrapy HTTP, magazyn
 plikowy pracuje na katalogu tymczasowym. Testy działają na skompilowanym procesie głównym,
 więc `npm test` najpierw go buduje.
 
@@ -172,6 +172,7 @@ więc `npm test` najpierw go buduje.
 | `cli-test.js`, `promptfile-test.js` | tryb CLI: stdin, `{promptFile}`, błędy |
 | `or-test.js`, `providers-test.js` | trzej dostawcy konwencji OpenAI, nagłówki, błędy |
 | `stream-test.js` | strumień SSE, brak strumienia, błąd w środku |
+| `features-test.js` | notatka (nowe linie, cudzysłowy), data użycia i kolejność, zmienne, porównanie, kopia zapasowa i rotacja |
 
 ## Zmierzone
 
@@ -179,7 +180,7 @@ więc `npm test` najpierw go buduje.
 |---|---|
 | zimny skan 1000 wersji z dysku | 387 ms |
 | wyszukiwanie przy 1000 wersjach | 1–2 ms (wymóg: <1 s) |
-| cały zestaw testów | 93/93 PASS |
+| cały zestaw testów | 131/131 PASS |
 | instalator | 79 MB, niepodpisany |
 | porównanie modeli (4 zadania × 5 modeli × 2 sędziów) | 22 przebiegi, 74 min, $2,40 |
 
@@ -195,7 +196,51 @@ więc `npm test` najpierw go buduje.
   Świadomie zaakceptowane w SCOPE §9 na czas, gdy narzędzie służy tylko autorowi.
 - **Indeks w pamięci zamiast SQLite/FTS5** — odstępstwo od zablokowanego stacku, opisane i uzasadnione
   w SCOPE §4, czeka na decyzję product ownera. Próg powrotu do SQLite: skan startowy powyżej ~1 s.
-- Brak tagów i szablonów — to backlog COULD.
+- Brak tagów — świadomie: przy tej skali wystarcza wyszukiwanie po treści.
+
+## Na co dzień: szybkie szukanie, zmienne, notatki, kopia
+
+### Szybkie szukanie — `Ctrl+Alt+P` z dowolnego programu
+
+Małe okno nad tym, w czym akurat pracujesz: wpisujesz frazę, strzałkami wybierasz, **Enter kopiuje
+prompt do schowka** i okno znika. Bez frazy pokazuje ostatnio używane. Z każdej rodziny bierze wersję
+działającą, a gdy żadnej nie oznaczono — najnowszą. Esc albo klik obok zamyka.
+
+Żeby skrót działał cały czas, **zamknięcie głównego okna chowa aplikację do zasobnika** (ikona przy
+zegarze). Stamtąd ją otworzysz albo zakończysz („Zakończ" w menu ikony). Gdy pulpit nie ma zasobnika
+(część środowisk Linuksa), zamknięcie okna kończy aplikację jak dawniej. Przed schowaniem i przed
+wyjściem okno zapisuje zaległe zmiany — proces główny czeka na zapis.
+
+Skrót to celowo nie `Ctrl+Shift+P` — ten zajmuje paleta poleceń VS Code i wielu edytorów, a skrót
+globalny zabrałby go wszystkim. Gdy `Ctrl+Alt+P` zajął już inny program, Ustawienia o tym mówią.
+
+### Zmienne `{{nazwa}}`
+
+Wpisz w treści np. `{{temat}}` albo `{{język}}`. Przy kopiowaniu — z edytora i z szybkiego szukania —
+aplikacja pyta o wartości i podstawia je wszędzie, gdzie zmienna występuje. Ostatnio wpisane wartości
+podpowiada przy kolejnym kopiowaniu. „Kopiuj bez podstawiania" oddaje treść z nawiasami.
+
+### Notatka i porównanie wersji
+
+Każda wersja ma pole **Notatka** — „co zmieniłem i dlaczego". Zapisuje się samo, jak treść, w nagłówku
+pliku wersji; widać ją na liście obok numeru wersji i w eksporcie rodziny (jako cytat pod nagłówkiem).
+**Porównaj** pokazuje różnice linia po linii względem innej wersji z rodziny — domyślnie względem
+rodzica, czyli to, co zmieniło się w tej wersji.
+
+### Ostatnio użyty
+
+Kopiowanie zapisuje w pliku wersji datę użycia (`lastUsedAt`). Lista rodzin układa się od
+najświeższego użycia; nieużywane idą za nimi, alfabetycznie. To nie jest licznik — tylko data
+ostatniego sięgnięcia.
+
+### Kopia zapasowa
+
+Ustawienia → **Kopia zapasowa**: wskazujesz folder, „Zrób kopię teraz" albo **codziennie
+automatycznie**. Kopia to zwykły folder `PromptPocket-kopia-RRRR-MM-DD_GG-MM-SS` z tymi samymi plikami
+`.md` — przywracasz ją skopiowaniem z powrotem. Zostaje **10 ostatnich**; starsze są usuwane, ale tylko
+foldery o tej nazwie — nic innego w folderze kopii nie jest ruszane. Folder kopii nie może leżeć
+w katalogu promptów. Gdy leży w OneDrive, Dropboxie albo Google Drive, Ustawienia ostrzegają, że kopia
+wyjdzie poza komputer.
 
 ## Import i eksport .md
 

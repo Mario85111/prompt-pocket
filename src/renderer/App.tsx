@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PromptFamily, PromptVersion, SearchHit } from '../shared/types';
+import type { BackupState, PromptFamily, PromptVersion, SearchHit, ShortcutState } from '../shared/types';
+import { diffLines } from '../shared/diff';
+import { fillVars, findVars } from '../shared/vars';
 import Creator from './Creator';
+import { errorText, whenUsed } from './format';
+import VarsForm from './VarsForm';
 
 const AUTOSAVE_MS = 2000;
 
@@ -50,9 +54,18 @@ export default function App() {
   const [skorka, setSkorka] = useState(wczytajSkorke);
   const [menu, setMenu] = useState<'nowa' | 'ustawienia' | null>(null);
   const barRef = useRef<HTMLElement | null>(null);
+  const [note, setNote] = useState('');
+  /** Z którą wersją porównujemy otwartą; null = zwykła edycja. */
+  const [compareWith, setCompareWith] = useState<string | null>(null);
+  /** Otwarty formularz zmiennych przed kopiowaniem. */
+  const [asking, setAsking] = useState(false);
+  const [shortcut, setShortcut] = useState<ShortcutState | null>(null);
+  const [backupSt, setBackupSt] = useState<BackupState | null>(null);
+  const [backupMsg, setBackupMsg] = useState<string | null>(null);
 
   const timer = useRef<number | null>(null);
   const pending = useRef<{ relPath: string; body: string } | null>(null);
+  const pendingNote = useRef<{ relPath: string; note: string } | null>(null);
 
   const refresh = useCallback(async () => {
     const list = await window.catalog.listFamilies();
@@ -78,15 +91,19 @@ export default function App() {
 
   /* ---------- autozapis (M-2) ---------- */
 
+  /** Zapisuje zaległą treść i notatkę. Ten sam autozapis obsługuje oba pola. */
   const flush = useCallback(async () => {
     if (timer.current !== null) {
       window.clearTimeout(timer.current);
       timer.current = null;
     }
     const p = pending.current;
-    if (!p) return;
+    const n = pendingNote.current;
+    if (!p && !n) return;
     pending.current = null;
-    await window.catalog.saveVersionBody(p.relPath, p.body);
+    pendingNote.current = null;
+    if (p) await window.catalog.saveVersionBody(p.relPath, p.body);
+    if (n) await window.catalog.saveVersionNote(n.relPath, n.note);
     setSavedAt(new Date().toLocaleTimeString('pl-PL'));
     setDirty(false);
     await refresh();
@@ -94,21 +111,39 @@ export default function App() {
 
   useEffect(() => {
     const onBlur = () => void flush();
+    // Powrót do okna (np. po kopiowaniu w szybkim szukaniu) odświeża listę i daty użycia.
+    const onFocus = () => void refresh();
     window.addEventListener('blur', onBlur);
     window.addEventListener('beforeunload', onBlur);
+    window.addEventListener('focus', onFocus);
+    // Proces główny woła to przed schowaniem okna do zasobnika i przed wyjściem — i czeka.
+    window.__ppFlush = flush;
     return () => {
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('beforeunload', onBlur);
+      window.removeEventListener('focus', onFocus);
+      delete window.__ppFlush;
     };
-  }, [flush]);
+  }, [flush, refresh]);
+
+  function scheduleSave() {
+    setDirty(true);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => void flush(), AUTOSAVE_MS);
+  }
 
   function onBodyChange(value: string) {
     setBody(value);
     if (!selected) return;
-    setDirty(true);
     pending.current = { relPath: selected.relPath, body: value };
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => void flush(), AUTOSAVE_MS);
+    scheduleSave();
+  }
+
+  function onNoteChange(value: string) {
+    setNote(value);
+    if (!selected) return;
+    pendingNote.current = { relPath: selected.relPath, note: value };
+    scheduleSave();
   }
 
   /* ---------- wyszukiwanie (M-4) ---------- */
@@ -131,6 +166,9 @@ export default function App() {
       await flush();
       setSelected(v);
       setBody(v.body);
+      setNote(v.note);
+      setCompareWith(null);
+      setAsking(false);
       setSavedAt(null);
       setDirty(false);
       setCopied(false);
@@ -167,12 +205,45 @@ export default function App() {
     if (fresh) setSelected(fresh);
   }
 
+  /** Kopiowanie zapamiętuje datę użycia wersji — po niej lista układa się od najświeższych. */
+  async function copyText(text: string) {
+    if (!selected) return;
+    await window.pocket.copyAndMarkUsed(selected.relPath, text);
+    setAsking(false);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+    await refresh();
+  }
+
+  /** Prompt ze zmiennymi {{…}} najpierw pyta o wartości. */
   async function copyToClipboard() {
     if (!selected) return;
     await flush();
-    await navigator.clipboard.writeText(body);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+    if (findVars(body).length > 0) setAsking(true);
+    else await copyText(body);
+  }
+
+  /* ---------- kopia zapasowa ---------- */
+
+  async function chooseBackupDir() {
+    setBackupMsg(null);
+    try {
+      const st = await window.pocket.chooseBackupDir();
+      if (st) setBackupSt(st);
+    } catch (err) {
+      setBackupMsg(errorText(err));
+    }
+  }
+
+  async function backupNow() {
+    setBackupMsg('Robię kopię…');
+    try {
+      const where = await window.pocket.backupNow();
+      setBackupMsg(`Gotowe: ${where}`);
+    } catch (err) {
+      setBackupMsg(`Nie wyszło: ${errorText(err)}`);
+    }
+    setBackupSt(await window.pocket.getBackup());
   }
 
   /** Wybór plików i zapis robi proces główny; tutaj zostaje odświeżenie listy. */
@@ -200,6 +271,35 @@ export default function App() {
       setBody('');
     }
     await refresh();
+  }
+
+  /* Ustawienia czytają stan skrótu i kopii przy każdym otwarciu — mogły się zmienić w tle. */
+  useEffect(() => {
+    if (menu !== 'ustawienia') return;
+    setBackupMsg(null);
+    void window.pocket.getShortcut().then(setShortcut);
+    void window.pocket.getBackup().then(setBackupSt);
+  }, [menu]);
+
+  /* ---------- porównanie i zmienne otwartej wersji ---------- */
+
+  const family = useMemo(
+    () => (selected ? families.find((f) => selected.relPath.startsWith(`${f.slug}/`)) ?? null : null),
+    [families, selected]
+  );
+  const others = useMemo(
+    () => (family && selected ? family.versions.filter((v) => v.relPath !== selected.relPath) : []),
+    [family, selected]
+  );
+  const compared = others.find((v) => v.relPath === compareWith) ?? null;
+  const diff = useMemo(() => (compared ? diffLines(compared.body, body) : []), [compared, body]);
+  const vars = useMemo(() => findVars(body), [body]);
+
+  /** Domyślnie porównujemy z rodzicem — to pokazuje, co zmieniło się w tej wersji. */
+  function startCompare() {
+    if (!selected || others.length === 0) return;
+    const parent = others.find((v) => v.id === selected.parentVersionId);
+    setCompareWith((parent ?? others[others.length - 1]).relPath);
   }
 
   /* Menu rozwijane zamyka kliknięcie poza paskiem i Escape. */
@@ -238,9 +338,6 @@ export default function App() {
       <header className="topbar" ref={barRef}>
         <div className="brand">
           <h1>Prompt Pocket</h1>
-          <p className="muted">
-            {stats.families} rodzin · {stats.versions} wersji · {stats.multiVersion} wielowersyjnych
-          </p>
         </div>
 
         <div className="tabs">
@@ -277,11 +374,11 @@ export default function App() {
             className={menu === 'nowa' ? 'menu-btn open' : 'menu-btn'}
             onClick={() => setMenu(menu === 'nowa' ? null : 'nowa')}
           >
-            + Nowa rodzina
+            + Dodaj
           </button>
           {menu === 'nowa' && (
             <div className="popover">
-              <span className="tag wide">Nazwa rodziny</span>
+              <span className="tag wide">Nowa rodzina</span>
               <input
                 autoFocus
                 value={newTitle}
@@ -294,17 +391,20 @@ export default function App() {
               <button onClick={() => void createFamily()} disabled={!newTitle.trim()}>
                 Załóż
               </button>
+              <div className="popover-sep" />
+              <button
+                className="ghost"
+                onClick={() => {
+                  setMenu(null);
+                  void importFiles();
+                }}
+              >
+                Importuj pliki .md
+              </button>
+              <p className="hint">Każdy plik zakłada osobną rodzinę; nazwa pliku staje się jej nazwą.</p>
             </div>
           )}
         </div>
-
-        <button
-          className="menu-btn"
-          title="Wczytaj pliki .md — każdy zakłada osobną rodzinę"
-          onClick={() => void importFiles()}
-        >
-          Importuj .md
-        </button>
 
         <div className="menu-host">
           <button
@@ -314,7 +414,50 @@ export default function App() {
             Ustawienia ▾
           </button>
           {menu === 'ustawienia' && (
-            <div className="popover right">
+            <div className="popover right settings">
+              <section className="settings-block">
+                <span className="tag wide">Szybkie szukanie</span>
+                <p className="hint">
+                  {!shortcut
+                    ? '…'
+                    : shortcut.registered
+                      ? <>Z dowolnego programu: <kbd>{shortcut.label}</kbd> — fraza, Enter i prompt jest w schowku. Zamknięcie okna chowa aplikację do zasobnika, żeby skrót działał dalej.</>
+                      : `Skrót ${shortcut.label} zajął już inny program. Szybkie szukanie otworzysz z ikony w zasobniku.`}
+                </p>
+              </section>
+
+              <section className="settings-block">
+                <span className="tag wide">Kopia zapasowa</span>
+                {backupSt?.dir ? <code title={backupSt.dir}>{backupSt.dir}</code> : <p className="hint">Folder na kopie nie jest wybrany.</p>}
+                {backupSt?.synced && (
+                  <p className="hint warn">Ten folder synchronizuje się z chmurą — kopie wyjdą poza ten komputer.</p>
+                )}
+                <div className="settings-row">
+                  <button onClick={() => void chooseBackupDir()}>{backupSt?.dir ? 'Zmień folder' : 'Wybierz folder'}</button>
+                  <button onClick={() => void backupNow()} disabled={!backupSt?.dir}>
+                    Zrób kopię teraz
+                  </button>
+                </div>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={backupSt?.auto ?? false}
+                    disabled={!backupSt?.dir}
+                    onChange={(e) => void window.pocket.setBackupAuto(e.target.checked).then(setBackupSt)}
+                  />
+                  Codziennie automatycznie (zostaje 10 ostatnich)
+                </label>
+                <p className="hint">
+                  {backupMsg ??
+                    (backupSt?.lastAt
+                      ? `Ostatnia kopia: ${new Date(backupSt.lastAt).toLocaleString('pl-PL')}`
+                      : 'Jeszcze nie było kopii.')}
+                </p>
+                {backupSt?.lastError && !backupMsg && (
+                  <p className="hint bad">Ostatnia kopia nie wyszła: {backupSt.lastError}</p>
+                )}
+              </section>
+
               <div className="skins">
                 <span className="tag">Skórka</span>
                 <select value={skorka} onChange={(e) => setSkorka(e.target.value)}>
@@ -366,7 +509,10 @@ export default function App() {
             families.map((f) => (
               <div key={f.id} className="family">
                 <div className="family-title">
-                  <span>{f.title}</span>
+                  <span>
+                    {f.title}
+                    {f.lastUsedAt && <span className="used">{whenUsed(f.lastUsedAt)}</span>}
+                  </span>
                   <span className="family-actions">
                     <button
                       className="link"
@@ -389,15 +535,20 @@ export default function App() {
                     key={v.relPath}
                     className={`version${selected?.relPath === v.relPath ? ' active' : ''}`}
                     style={{ marginLeft: depthOf(v.relPath) * 12 }}
+                    title={v.note || undefined}
                     onClick={() => void openVersion(v)}
                   >
                     <span>v{v.versionNo}</span>
+                    {v.note && <span className="version-note">{v.note.split(/\r?\n/)[0]}</span>}
                     {v.working && <span className="badge">działa</span>}
                   </button>
                 ))}
               </div>
             ))}
         </nav>
+            <p className="sidebar-stats muted">
+              {stats.families} rodzin · {stats.versions} wersji · {stats.multiVersion} wielowersyjnych
+            </p>
           </aside>
         )}
 
@@ -440,6 +591,14 @@ export default function App() {
               <button onClick={() => void markWorking()} disabled={selected.working}>
                 {selected.working ? 'To jest wersja działająca' : 'Oznacz jako działającą'}
               </button>
+              <button
+                className={compared ? 'ghost on' : 'ghost'}
+                onClick={() => (compared ? setCompareWith(null) : startCompare())}
+                disabled={others.length === 0}
+                title={others.length === 0 ? 'W rodzinie jest tylko ta wersja' : 'Pokaż różnice względem innej wersji'}
+              >
+                {compared ? 'Wróć do edycji' : 'Porównaj'}
+              </button>
               <button className="ghost" onClick={() => void window.catalog.exportVersion(selected.relPath)}>
                 Eksportuj .md
               </button>
@@ -448,16 +607,77 @@ export default function App() {
               </button>
             </div>
 
-            <textarea
-              value={body}
-              onChange={(e) => onBodyChange(e.target.value)}
-              onBlur={() => void flush()}
-              spellCheck={false}
-              placeholder="Treść promptu. Zapisuje się sama — nie ma przycisku „Zapisz”."
-            />
+            {asking && (
+              <VarsForm
+                vars={vars}
+                onSubmit={(values) => void copyText(fillVars(body, values))}
+                onRaw={() => void copyText(body)}
+                onCancel={() => setAsking(false)}
+              />
+            )}
+
+            <label className="note-row">
+              <span className="tag">Notatka</span>
+              <input
+                value={note}
+                placeholder="Co zmieniłem w tej wersji i dlaczego…"
+                onChange={(e) => onNoteChange(e.target.value)}
+                onBlur={() => void flush()}
+              />
+            </label>
+
+            {compared ? (
+              <div className="diff">
+                <div className="diff-head">
+                  <span>Porównanie z</span>
+                  <select value={compared.relPath} onChange={(e) => setCompareWith(e.target.value)}>
+                    {others.map((v) => (
+                      <option key={v.relPath} value={v.relPath}>
+                        v{v.versionNo}
+                        {v.working ? ' (działa)' : ''}
+                        {v.id === selected.parentVersionId ? ' — rodzic' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="diff-legend">
+                    <span className="del">− tylko w v{compared.versionNo}</span>
+                    <span className="add">+ tylko w v{selected.versionNo}</span>
+                  </span>
+                </div>
+                {compared.note && <p className="hint">Notatka v{compared.versionNo}: {compared.note}</p>}
+                <pre className="diff-body">
+                  {diff.every((l) => l.kind === 'same') ? (
+                    <span className="muted">Treść obu wersji jest identyczna.</span>
+                  ) : (
+                    diff.map((l, i) => (
+                      <span key={i} className={`diff-line ${l.kind}`}>
+                        {l.kind === 'add' ? '+ ' : l.kind === 'del' ? '− ' : '  '}
+                        {l.text || ' '}
+                        {'\n'}
+                      </span>
+                    ))
+                  )}
+                </pre>
+              </div>
+            ) : (
+              <textarea
+                value={body}
+                onChange={(e) => onBodyChange(e.target.value)}
+                onBlur={() => void flush()}
+                spellCheck={false}
+                placeholder="Treść promptu. Zapisuje się sama — nie ma przycisku „Zapisz”. Zmienne zapisz jako {{nazwa}}."
+              />
+            )}
 
             <p className="hint bottom">
-              Nowa wersja ląduje w podkatalogu tej, z której powstała — struktura folderów pokazuje pochodzenie.
+              {vars.length > 0 ? (
+                <>
+                  Zmienne: {vars.map((v) => <code key={v} className="var-chip">{`{{${v}}}`}</code>)} — przy kopiowaniu
+                  zapytam o wartości.
+                </>
+              ) : (
+                <>Wpisz {'{{nazwa}}'} w treści, a przy kopiowaniu zapytam o wartość. Nowa wersja ląduje w podkatalogu tej, z której powstała.</>
+              )}
             </p>
           </>
         )}

@@ -1,11 +1,24 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeImage,
+  screen,
+  shell,
+  Tray,
+} from 'electron';
 import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 import * as store from './store';
 import * as settings from './settings';
 import * as agents from './agents';
 import * as providers from './providers';
-import type { QA } from '../shared/types';
+import * as backup from './backup';
+import type { BackupState, QA } from '../shared/types';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -27,35 +40,224 @@ function resolveRoot(): string {
   return path.join(syncedToCloud ? app.getPath('home') : documents, 'PromptPocket');
 }
 
-function createWindow(): void {
+/* ---------- okna ---------- */
+
+/**
+ * Globalny skrót do szybkiego szukania. Nie Ctrl+Shift+P — to paleta poleceń w VS Code
+ * i wielu innych edytorach, a skrót globalny zabrałby go wszystkim programom.
+ */
+const SHORTCUT = 'CommandOrControl+Alt+P';
+const SHORTCUT_LABEL = process.platform === 'darwin' ? '⌘⌥P' : 'Ctrl+Alt+P';
+const QUICK_SIZE = { width: 640, height: 440 };
+
+// Windows bierze ikonę z exe; okno i zasobnik na Linuksie potrzebują jej z pliku (build/ jest w paczce).
+const ICON = path.join(__dirname, '../../build/icon.png');
+
+let mainWin: BrowserWindow | null = null;
+let quickWin: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let quitting = false;
+let shortcutRegistered = false;
+
+const webPreferences = {
+  preload: path.join(__dirname, 'preload.js'),
+  contextIsolation: true,
+  nodeIntegration: false,
+};
+
+/** Ten sam renderer obsługuje oba okna; okno szybkiego szukania rozpoznaje się po #quick. */
+function loadRenderer(win: BrowserWindow, hash?: string): void {
+  // SCOPE: zero wywołań sieciowych w MVP. W dev ładujemy serwer Vite z localhosta.
+  if (isDev) {
+    void win.loadURL(`http://localhost:5173${hash ? `#${hash}` : ''}`);
+  } else {
+    // dist-electron/main/ → korzeń projektu → dist/
+    void win.loadFile(path.join(__dirname, '../../dist/index.html'), hash ? { hash } : undefined);
+  }
+}
+
+/** Prosi okno o zapis zaległych zmian i czeka, aż skończy. */
+async function flushWindow(win: BrowserWindow | null): Promise<void> {
+  if (!win || win.isDestroyed()) return;
+  try {
+    await win.webContents.executeJavaScript('window.__ppFlush ? window.__ppFlush() : null', true);
+  } catch {
+    /* okno mogło nie zdążyć się załadować — wtedy nie ma czego zapisywać */
+  }
+}
+
+function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1100,
     height: 720,
+    minWidth: 760,
+    minHeight: 480,
     // Okno pokazujemy dopiero, gdy strona jest gotowa — inaczej przy ciemnych skórkach
     // (Matrix, Speed Night) mignąłby jasny prostokąt w kolorze domyślnego motywu.
     show: false,
     title: 'Prompt Pocket',
-    // Windows bierze ikonę z exe; okno na Linuksie potrzebuje jej z pliku (build/ jest w paczce).
-    icon: path.join(__dirname, '../../build/icon.png'),
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
+    icon: ICON,
+    webPreferences,
   });
 
   win.once('ready-to-show', () => win.show());
 
-  // SCOPE: zero wywołań sieciowych w MVP. W dev ładujemy serwer Vite z localhosta.
-  if (isDev) {
-    void win.loadURL('http://localhost:5173');
-  } else {
-    // dist-electron/main/ → korzeń projektu → dist/
-    void win.loadFile(path.join(__dirname, '../../dist/index.html'));
+  // Zamknięcie okna chowa je do zasobnika — inaczej skrót globalny nie miałby do czego wracać.
+  // Bez zasobnika (część pulpitów Linuksa) zamknięcie kończy aplikację jak dawniej.
+  win.on('close', (e) => {
+    if (quitting || !tray) return;
+    e.preventDefault();
+    void flushWindow(win).then(() => win.hide());
+  });
+  win.on('closed', () => {
+    mainWin = null;
+  });
+
+  loadRenderer(win);
+  return win;
+}
+
+function showMain(): void {
+  if (!mainWin || mainWin.isDestroyed()) {
+    mainWin = createMainWindow();
+    return;
+  }
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  mainWin.focus();
+}
+
+function createQuickWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    ...QUICK_SIZE,
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    title: 'Prompt Pocket — szybkie szukanie',
+    icon: ICON,
+    webPreferences,
+  });
+
+  // Okno szybkie żyje tylko w chwili użycia: klik obok je chowa.
+  win.on('blur', () => {
+    if (!win.isDestroyed()) win.hide();
+  });
+  win.on('close', (e) => {
+    if (quitting) return;
+    e.preventDefault();
+    win.hide();
+  });
+  win.on('closed', () => {
+    quickWin = null;
+  });
+
+  loadRenderer(win, 'quick');
+  return win;
+}
+
+/** Pokazuje okno szybkiego szukania na ekranie, na którym jest kursor; drugi raz — chowa. */
+function toggleQuick(): void {
+  if (!quickWin || quickWin.isDestroyed()) quickWin = createQuickWindow();
+  if (quickWin.isVisible()) {
+    quickWin.hide();
+    return;
+  }
+  const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  quickWin.setBounds({
+    x: workArea.x + Math.round((workArea.width - QUICK_SIZE.width) / 2),
+    y: workArea.y + Math.round(workArea.height * 0.18),
+    ...QUICK_SIZE,
+  });
+  quickWin.show();
+  quickWin.focus();
+  quickWin.webContents.send('pocket:quickShown');
+}
+
+function createTray(): void {
+  try {
+    const size = process.platform === 'win32' ? 16 : 22;
+    tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: size, height: size }));
+  } catch {
+    tray = null; // bez zasobnika zamknięcie okna po prostu kończy aplikację
+    return;
+  }
+  tray.setToolTip('Prompt Pocket');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Otwórz Prompt Pocket', click: showMain },
+      { label: `Szybkie szukanie (${SHORTCUT_LABEL})`, click: toggleQuick },
+      { type: 'separator' },
+      { label: 'Zakończ', click: () => app.quit() },
+    ])
+  );
+  tray.on('click', showMain);
+}
+
+/* ---------- kopia zapasowa ---------- */
+
+const backupConfigPath = () => path.join(app.getPath('userData'), 'backup.json');
+/** Błąd ostatniej kopii automatycznej — trzymany w pamięci, żeby interfejs mógł go pokazać. */
+let lastBackupError: string | null = null;
+
+async function backupState(): Promise<BackupState> {
+  const config = await backup.readConfig(backupConfigPath());
+  return { ...config, synced: config.dir ? backup.isSyncedFolder(config.dir) : false, lastError: lastBackupError };
+}
+
+async function runBackup(): Promise<string> {
+  const config = await backup.readConfig(backupConfigPath());
+  if (!config.dir) throw new Error('Najpierw wskaż folder na kopie.');
+  try {
+    const result = await backup.backupNow(store.getRoot(), config.dir);
+    await backup.writeConfig(backupConfigPath(), { ...config, lastAt: new Date().toISOString() });
+    lastBackupError = null;
+    return result.path;
+  } catch (err) {
+    lastBackupError = err instanceof Error ? err.message : String(err);
+    throw err;
   }
 }
 
+/** Sprawdzane przy starcie i co godzinę — aplikacja potrafi siedzieć w zasobniku tygodniami. */
+async function autoBackupIfDue(): Promise<void> {
+  try {
+    if (backup.isDue(await backup.readConfig(backupConfigPath()))) await runBackup();
+  } catch {
+    /* błąd jest w lastBackupError i widać go w ustawieniach */
+  }
+}
+
+/* ---------- start ---------- */
+
+// Druga kopia aplikacji (np. ponowne kliknięcie skrótu na pulpicie) tylko pokazuje pierwszą —
+// dwie kopie biłyby się o skrót globalny i pisałyby do tych samych plików.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', showMain);
+}
+
+/** Przed wyjściem okno musi zapisać zaległe zmiany — czekamy na nie, potem wychodzimy naprawdę. */
+let flushedForQuit = false;
+app.on('before-quit', (e) => {
+  quitting = true;
+  if (flushedForQuit) return;
+  e.preventDefault();
+  flushedForQuit = true;
+  void flushWindow(mainWin).finally(() => app.quit());
+});
+
+app.on('will-quit', () => globalShortcut.unregisterAll());
+
 app.whenReady().then(async () => {
+  if (!gotLock) return;
+
   store.setRoot(resolveRoot());
   // Kosz systemowy zamiast kasowania na amen — usunięcie promptu ma być odwracalne.
   store.setRemover((absPath) => shell.trashItem(absPath));
@@ -70,6 +272,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('catalog:setWorkingVersion', (_e, relPath: string) => store.setWorkingVersion(relPath));
   ipcMain.handle('catalog:saveVersionBody', (_e, relPath: string, body: string) =>
     store.saveVersionBody(relPath, body)
+  );
+  ipcMain.handle('catalog:saveVersionNote', (_e, relPath: string, note: string) =>
+    store.saveVersionNote(relPath, note)
   );
   ipcMain.handle('catalog:search', (_e, query: string) => store.search(query));
   ipcMain.handle('catalog:appendVersion', (_e, slug: string, body: string) =>
@@ -164,6 +369,41 @@ app.whenReady().then(async () => {
     return true;
   });
 
+  /* ---------- schowek, skrót, kopia zapasowa ---------- */
+
+  /** Schowek przez proces główny: okno szybkiego szukania chowa się zaraz po kopiowaniu. */
+  ipcMain.handle('pocket:copyAndMarkUsed', async (_e, relPath: string, text: string) => {
+    clipboard.writeText(text);
+    await store.markUsed(relPath);
+  });
+  ipcMain.handle('pocket:getShortcut', () => ({ label: SHORTCUT_LABEL, registered: shortcutRegistered }));
+  ipcMain.handle('pocket:hideQuick', () => quickWin?.hide());
+
+  ipcMain.handle('pocket:getBackup', () => backupState());
+  ipcMain.handle('pocket:chooseBackupDir', async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const { canceled, filePaths } = await dialog.showOpenDialog(window ?? undefined!, {
+      title: 'Folder na kopie zapasowe',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (canceled || filePaths.length === 0) return null;
+    const dir = filePaths[0];
+    const rel = path.relative(path.resolve(store.getRoot()), path.resolve(dir));
+    if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
+      throw new Error('Folder kopii nie może leżeć wewnątrz katalogu promptów.');
+    }
+    const config = await backup.readConfig(backupConfigPath());
+    await backup.writeConfig(backupConfigPath(), { ...config, dir });
+    return backupState();
+  });
+  ipcMain.handle('pocket:setBackupAuto', async (_e, auto: boolean) => {
+    const config = await backup.readConfig(backupConfigPath());
+    await backup.writeConfig(backupConfigPath(), { ...config, auto });
+    void autoBackupIfDue();
+    return backupState();
+  });
+  ipcMain.handle('pocket:backupNow', () => runBackup());
+
   /* M2 — agenci. Klucz API zostaje w procesie głównym; renderer wie tylko, czy istnieje. */
   ipcMain.handle('agents:hasApiKey', (_e, mode: settings.KeyedMode) => settings.hasApiKey(mode));
   ipcMain.handle('agents:setApiKey', (_e, mode: settings.KeyedMode, key: string) =>
@@ -200,11 +440,17 @@ app.whenReady().then(async () => {
     }
   });
 
-  createWindow();
+  createTray();
+  mainWin = createMainWindow();
+  // Okno szybkie tworzone od razu, ukryte — skrót ma działać natychmiast, bez ładowania strony.
+  quickWin = createQuickWindow();
+  // Rejestracja może się nie udać, gdy inny program zajął skrót — interfejs to pokazuje.
+  shortcutRegistered = globalShortcut.register(SHORTCUT, toggleQuick);
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  void autoBackupIfDue();
+  setInterval(() => void autoBackupIfDue(), 60 * 60 * 1000);
+
+  app.on('activate', showMain);
 });
 
 app.on('window-all-closed', () => {

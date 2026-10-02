@@ -49,7 +49,15 @@ function parseFile(raw: string): { meta: Meta; body: string } {
     if (sep === -1) continue;
     const key = line.slice(0, sep).trim();
     let value = line.slice(sep + 1).trim();
-    if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      // Wartości cytowane zapisujemy jako JSON, więc tak je też czytamy — dzięki temu
+      // notatka z nową linią albo cudzysłowem wraca dokładnie taka, jaką wpisano.
+      try {
+        value = JSON.parse(value);
+      } catch {
+        value = value.slice(1, -1);
+      }
+    }
     meta[key] = value;
   }
   return { meta, body };
@@ -57,7 +65,7 @@ function parseFile(raw: string): { meta: Meta; body: string } {
 
 function serializeFile(meta: Meta, body: string): string {
   const head = Object.entries(meta)
-    .map(([k, v]) => `${k}: ${/[:#]|^\s|\s$/.test(v) ? JSON.stringify(v) : v}`)
+    .map(([k, v]) => `${k}: ${/[:#"\\\r\n]|^\s|\s$/.test(v) ? JSON.stringify(v) : v}`)
     .join('\n');
   // Dokładnie jeden znak nowej linii po zamykającym ---, bo parser zdejmuje dokładnie jeden.
   // Symetria jest tu warunkiem bezstratności: inaczej każdy cykl zapis→odczyt dokłada pustą linię.
@@ -140,6 +148,8 @@ async function readVersion(familyDir: string, filePath: string): Promise<PromptV
     versionNo,
     createdAt: meta.createdAt || new Date(0).toISOString(),
     working: meta.working === 'true',
+    note: meta.note ?? '',
+    lastUsedAt: meta.lastUsedAt || null,
     relPath: path.relative(rootDir, filePath).split(path.sep).join('/'),
     body,
   };
@@ -185,12 +195,32 @@ async function scanFromDisk(): Promise<PromptFamily[]> {
       title: meta.title || e.name,
       slug: e.name,
       createdAt: meta.createdAt || new Date(0).toISOString(),
+      lastUsedAt: latestUse(versions),
       versions,
     });
   }
 
-  families.sort((a, b) => a.title.localeCompare(b.title, 'pl'));
+  families.sort(byRecentUse);
   return families;
+}
+
+function latestUse(versions: PromptVersion[]): string | null {
+  let latest: string | null = null;
+  for (const v of versions) {
+    if (v.lastUsedAt && (!latest || v.lastUsedAt > latest)) latest = v.lastUsedAt;
+  }
+  return latest;
+}
+
+/**
+ * Najpierw rodziny używane, od najświeższego użycia — po to, by to, po co sięgasz,
+ * było na wierzchu. Nigdy nieużywane idą za nimi, alfabetycznie.
+ */
+function byRecentUse(a: PromptFamily, b: PromptFamily): number {
+  if (a.lastUsedAt && b.lastUsedAt) return b.lastUsedAt.localeCompare(a.lastUsedAt);
+  if (a.lastUsedAt) return -1;
+  if (b.lastUsedAt) return 1;
+  return a.title.localeCompare(b.title, 'pl');
 }
 
 /* ---------- zapis ---------- */
@@ -229,7 +259,7 @@ export async function createFamily(title: string): Promise<PromptFamily> {
   const files = await collectVersionFiles(familyDir);
   const versions = await Promise.all(files.map((f) => readVersion(familyDir, f)));
 
-  return { id: familyId, title: clean, slug, createdAt: now, versions };
+  return { id: familyId, title: clean, slug, createdAt: now, lastUsedAt: null, versions };
 }
 
 /* ---------- M-1: nowa wersja wywiedziona z istniejącej ---------- */
@@ -365,7 +395,9 @@ export async function exportFamily(slug: string): Promise<{ name: string; conten
 
   const parts = [`# ${family.title}`, ''];
   for (const v of family.versions) {
-    parts.push(`## v${v.versionNo}${v.working ? ' (wersja działająca)' : ''}`, '', v.body.trim(), '');
+    parts.push(`## v${v.versionNo}${v.working ? ' (wersja działająca)' : ''}`, '');
+    if (v.note) parts.push(...v.note.split(/\r?\n/).map((l) => `> ${l}`), '');
+    parts.push(v.body.trim(), '');
   }
   return { name: `${family.slug}.md`, content: parts.join('\n') };
 }
@@ -501,4 +533,27 @@ export async function saveVersionBody(relPath: string, body: string): Promise<vo
   const { meta } = parseFile(raw);
   await writeAtomic(resolved, serializeFile(meta, body));
   invalidate();
+}
+
+/** Zmienia jedno pole nagłówka wersji, treść zostawia bajt w bajt. */
+async function updateMeta(relPath: string, key: string, value: string | null): Promise<void> {
+  const resolved = safeResolve(relPath);
+  const { meta, body } = parseFile(await fs.readFile(resolved, 'utf8'));
+  if (value === null || value === '') delete meta[key];
+  else meta[key] = value;
+  await writeAtomic(resolved, serializeFile(meta, body));
+  invalidate();
+}
+
+/** Notatka „co zmieniłem i dlaczego" — w nagłówku pliku wersji, czytelna także w notatniku. */
+export async function saveVersionNote(relPath: string, note: string): Promise<void> {
+  await updateMeta(relPath, 'note', note.trim());
+}
+
+/**
+ * Zapamiętuje moment użycia (skopiowania) wersji. To nie licznik — tylko data ostatniego
+ * sięgnięcia, według której lista rodzin układa się od najświeższych.
+ */
+export async function markUsed(relPath: string, at: Date = new Date()): Promise<void> {
+  await updateMeta(relPath, 'lastUsedAt', at.toISOString());
 }

@@ -94,6 +94,8 @@ body {
   padding-bottom: var(--v);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  /* minmax(0, …): najszerszy element nie może rozepchnąć siatki poza kieszeń. */
+  grid-template-columns: minmax(0, 1fr);
   height: auto;
 }
 
@@ -103,8 +105,9 @@ body {
   position: relative;
   z-index: 5;
   display: flex;
+  flex-wrap: wrap; /* wąskie okno: drugi rząd zamiast uciętych przycisków */
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   padding: 10px 14px;
   background: var(--panel);
   border-bottom: var(--bw) solid var(--line);
@@ -112,10 +115,9 @@ body {
 
 .topbar .brand { padding: 5px 10px; box-shadow: var(--shadow-sm); white-space: nowrap; }
 .topbar .brand h1 { font-size: 15px; line-height: 1.1; }
-.topbar .brand p { margin: 2px 0 0; font-size: 10px; }
 .topbar .tabs { flex-wrap: nowrap; }
 .topbar .tab { flex: none; padding: 7px 14px; }
-.topbar .search-row { flex: 1; min-width: 120px; }
+.topbar .search-row { flex: 1 1 180px; min-width: 0; }
 .topbar .grow { flex: 1; }
 .menu-btn { white-space: nowrap; padding: 7px 12px; }
 .menu-btn.open { background: var(--accent); color: var(--on-accent); }
@@ -141,8 +143,10 @@ body {
 .popover code { font-size: 10px; color: var(--muted); word-break: break-all; font-family: var(--mono); }
 .tag.wide { padding: 3px 8px; }
 
-.workspace { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
-.workspace.solo { grid-template-columns: 1fr; }
+.workspace { display: grid; grid-template-columns: clamp(220px, 28%, 300px) minmax(0, 1fr); min-height: 0; }
+.workspace.solo { grid-template-columns: minmax(0, 1fr); }
+.popover-sep { border-top: var(--bw-thin) dashed var(--line); }
+.sidebar-stats { margin: 0; font-size: 10px; }
 
 /* ---------- panel boczny ---------- */
 
@@ -354,7 +358,10 @@ button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
 /* ---------- edytor ---------- */
 
-.editor { display: flex; flex-direction: column; padding: 16px; gap: 12px; min-width: 0; overflow: hidden; }
+/* Przy małym oknie edytor się przewija — zgniatanie treści do zera wysokości jest gorsze. */
+.editor { display: flex; flex-direction: column; padding: 16px; gap: 12px; min-width: 0; overflow-y: auto; }
+/* Elementy edytora trzymają swoją wysokość; rośnie tylko pole treści albo porównanie. */
+.editor > * { flex-shrink: 0; }
 
 .editor-head {
   display: flex;
@@ -392,7 +399,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
   resize: none;
   line-height: 1.6;
   box-shadow: var(--shadow);
-  min-height: 0;
+  min-height: 180px;
 }
 
 .bottom { padding-bottom: 2px; }
@@ -582,3 +589,149 @@ button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 ::-webkit-scrollbar { width: 12px; height: 12px; }
 ::-webkit-scrollbar-track { background: var(--bg); border-left: var(--bw-thin) solid var(--line); }
 ::-webkit-scrollbar-thumb { background: var(--line); border: 2px solid var(--bg); }
+
+/* ---------- ustawienia: skrót i kopia zapasowa ---------- */
+
+.popover.settings { width: 360px; max-height: calc(100vh - 160px); overflow-y: auto; }
+.settings-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: var(--bw-thin) dashed var(--line);
+}
+.settings-block .tag { align-self: flex-start; }
+.settings-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.settings-row button { flex: 1; font-size: 11px; padding: 6px 8px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 12px; cursor: pointer; }
+.check input { width: 16px; height: 16px; padding: 0; box-shadow: none; }
+.hint.warn { color: var(--ink); background: color-mix(in srgb, var(--warn) 25%, var(--panel)); padding: 4px 6px; }
+.hint.bad { color: var(--ink); background: color-mix(in srgb, var(--bad) 20%, var(--panel)); padding: 4px 6px; }
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  border: var(--bw-thin) solid var(--line);
+  border-radius: var(--radius);
+  padding: 0 5px;
+  background: var(--panel-2);
+}
+
+/* ---------- lista: data użycia i notatka przy wersji ---------- */
+
+.used {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: var(--weight-normal);
+  text-transform: none;
+  color: var(--muted);
+}
+.version-note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-normal);
+  text-transform: none;
+  opacity: 0.75;
+}
+
+/* ---------- edytor: notatka, porównanie, zmienne ---------- */
+
+.note-row {
+  display: flex;
+  border: var(--bw) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  overflow: hidden;
+}
+.note-row input { flex: 1; border: none; border-radius: 0; font-size: 12px; padding: 6px 10px; }
+.note-row input:focus { box-shadow: none; }
+
+.ghost.on { background: var(--accent-2); color: var(--on-accent-2); }
+
+.diff {
+  flex: 1;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: var(--bw) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 10px;
+}
+.diff-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; font-weight: var(--weight-bold); }
+.diff-head select { font-size: 12px; padding: 4px 6px; }
+.diff-legend { margin-left: auto; display: flex; gap: 8px; font-family: var(--mono); font-size: 11px; }
+.diff-legend .add, .diff-line.add { background: color-mix(in srgb, var(--ok) 24%, var(--panel)); }
+.diff-legend .del, .diff-line.del { background: color-mix(in srgb, var(--bad) 20%, var(--panel)); }
+.diff-legend span { padding: 1px 6px; border-radius: var(--radius); }
+.diff-body {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-line { display: block; }
+.diff-line.del { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 60%, transparent); }
+
+.vars-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: var(--bw) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.vars-form .tag { align-self: flex-start; }
+.vars-row { display: grid; grid-template-columns: minmax(90px, 160px) 1fr; gap: 8px; align-items: center; }
+.vars-name { font-family: var(--mono); font-size: 12px; font-weight: var(--weight-bold); overflow-wrap: anywhere; }
+.vars-row input { font-size: 12px; padding: 6px 8px; min-width: 0; }
+.vars-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.var-chip { font-family: var(--mono); background: var(--panel-2); padding: 0 4px; margin: 0 2px; border-radius: var(--radius); }
+
+/* ---------- okno szybkiego szukania ---------- */
+
+/* Okno bez ramki systemowej: ramkę i tło daje sam motyw, bez kształtu kieszeni. */
+.quick-window body { background: var(--panel); background-image: none; }
+.quick {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: var(--bw) solid var(--line);
+  background: var(--bg);
+  background-image: var(--bg-image);
+}
+.quick-search .search { font-size: 15px; padding: 10px 12px; }
+.quick-list { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.quick-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border: var(--bw-thin) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  cursor: pointer;
+}
+.quick-item.active { background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-sm); }
+.quick-item.active .muted { color: inherit; opacity: 0.8; }
+.quick-head { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.quick-head .muted { font-size: 11px; white-space: nowrap; }
+.quick-excerpt { font-family: var(--mono); font-size: 11px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-empty { padding: 20px 4px; font-size: 13px; }
+.quick-hint, .quick-status { margin: 0; font-size: 11px; color: var(--muted); }
+.quick-vars { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.quick-title { margin: 0; font-weight: var(--weight-bold); }
