@@ -6,8 +6,9 @@ Zrealizowane wszystkie MUST-y M-1…M-7 (katalog) oraz M2 (kreator: agent piszą
 Wchodzisz w projekt po przerwie? Zacznij od [STAN-PROJEKTU.md](STAN-PROJEKTU.md) — stan, decyzje
 i otwarte punkty w jednym miejscu.
 
-Aplikacja ma dwie zakładki: **Katalog** — to, co zapisane; **Kreator** — budowanie nowego promptu z pomocą
-dwóch agentów. Katalog działa w całości bez sieci; kreator jest jedynym miejscem, które wychodzi na zewnątrz.
+Aplikacja ma trzy zakładki: **Katalog** — to, co zapisane; **Kreator** — budowanie nowego promptu z pomocą
+dwóch agentów; **Pomoc** — instrukcja dla użytkownika, wbudowana, bo instalator nie zawiera tego README
+(źródło: `src/renderer/Help.tsx` — przy zmianie etykiet przycisków trzeba poprawić i ją). Katalog działa w całości bez sieci; kreator jest jedynym miejscem, które wychodzi na zewnątrz.
 
 ## Uruchomienie
 

@@ -4,6 +4,7 @@ import { diffLines } from '../shared/diff';
 import { fillVars, findVars } from '../shared/vars';
 import Creator from './Creator';
 import { errorText, whenUsed } from './format';
+import Help from './Help';
 import VarsForm from './VarsForm';
 import logo from '../../build/icon.svg';
 
@@ -51,9 +52,11 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [copied, setCopied] = useState(false);
-  const [view, setView] = useState<'katalog' | 'kreator'>('katalog');
+  const [view, setView] = useState<'katalog' | 'kreator' | 'pomoc'>('katalog');
   const [skorka, setSkorka] = useState(wczytajSkorke);
   const [menu, setMenu] = useState<'nowa' | 'ustawienia' | null>(null);
+  /** W którą stronę rośnie okienko: zależy od tego, gdzie stoi przycisk po zawinięciu paska. */
+  const [menuSide, setMenuSide] = useState<'left' | 'right'>('right');
   const barRef = useRef<HTMLElement | null>(null);
   const [note, setNote] = useState('');
   /** Z którą wersją porównujemy otwartą; null = zwykła edycja. */
@@ -303,6 +306,21 @@ export default function App() {
     setCompareWith((parent ?? others[others.length - 1]).relPath);
   }
 
+  /**
+   * Przycisk w prawej połowie okna otwiera okienko w lewo, w lewej — w prawo.
+   * Stałe wyrównanie nie wystarcza: przy wąskim oknie pasek się zawija i przyciski
+   * przechodzą do lewej krawędzi.
+   */
+  function toggleMenu(which: 'nowa' | 'ustawienia', button: HTMLElement) {
+    if (menu === which) {
+      setMenu(null);
+      return;
+    }
+    const r = button.getBoundingClientRect();
+    setMenuSide(r.left + r.width / 2 > window.innerWidth / 2 ? 'right' : 'left');
+    setMenu(which);
+  }
+
   /* Menu rozwijane zamyka kliknięcie poza paskiem i Escape. */
   useEffect(() => {
     if (!menu) return;
@@ -350,6 +368,9 @@ export default function App() {
           <button className={view === 'kreator' ? 'tab active' : 'tab'} onClick={() => setView('kreator')}>
             Kreator
           </button>
+          <button className={view === 'pomoc' ? 'tab active' : 'tab'} onClick={() => setView('pomoc')}>
+            Pomoc
+          </button>
         </div>
 
         {/* Szukanie przeszukuje to, co jest — stąd tylko w katalogu, zrośnięte z listą trafień. */}
@@ -375,12 +396,12 @@ export default function App() {
         <div className="menu-host">
           <button
             className={menu === 'nowa' ? 'menu-btn open' : 'menu-btn'}
-            onClick={() => setMenu(menu === 'nowa' ? null : 'nowa')}
+            onClick={(e) => toggleMenu('nowa', e.currentTarget)}
           >
             + Dodaj
           </button>
           {menu === 'nowa' && (
-            <div className="popover">
+            <div className={`popover ${menuSide}`}>
               <span className="tag wide">Nowa rodzina</span>
               <input
                 autoFocus
@@ -412,12 +433,12 @@ export default function App() {
         <div className="menu-host">
           <button
             className={menu === 'ustawienia' ? 'menu-btn open' : 'menu-btn'}
-            onClick={() => setMenu(menu === 'ustawienia' ? null : 'ustawienia')}
+            onClick={(e) => toggleMenu('ustawienia', e.currentTarget)}
           >
             Ustawienia ▾
           </button>
           {menu === 'ustawienia' && (
-            <div className="popover right settings">
+            <div className={`popover ${menuSide} settings`}>
               <section className="settings-block">
                 <span className="tag wide">Szybkie szukanie</span>
                 <p className="hint">
@@ -565,9 +586,23 @@ export default function App() {
           />
         )}
 
+        {view === 'pomoc' && <Help root={root} onGoToCatalog={() => setView('katalog')} />}
+
         {view === 'katalog' && !selected && (
           <div className="placeholder">
-            <p>Wybierz wersję promptu z listy albo załóż nową rodzinę.</p>
+            {families.length === 0 ? (
+              <div className="first-run">
+                <p>Katalog jest pusty. Kliknij <b>+ Dodaj</b>, żeby założyć pierwszą rodzinę.</p>
+                <p>
+                  Pierwszy raz tutaj?{' '}
+                  <button className="link" onClick={() => setView('pomoc')}>
+                    Zobacz, jak to działa
+                  </button>
+                </p>
+              </div>
+            ) : (
+              <p>Wybierz wersję promptu z listy albo załóż nową rodzinę.</p>
+            )}
           </div>
         )}
 

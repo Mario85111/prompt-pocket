@@ -152,7 +152,10 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
+.popover.left { left: 0; right: auto; }
 .popover.right { left: auto; right: 0; }
+/* Siatka bezpieczeństwa: okienko nigdy szersze niż okno. */
+.popover { max-width: calc(100vw - 60px); }
 .popover input { min-width: 0; font-size: 12px; padding: 7px 9px; }
 .popover code { font-size: 10px; color: var(--muted); word-break: break-all; font-family: var(--mono); }
 .tag.wide { padding: 3px 8px; }
@@ -749,3 +752,60 @@ kbd {
 .quick-hint, .quick-status { margin: 0; font-size: 11px; color: var(--muted); }
 .quick-vars { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .quick-title { margin: 0; font-weight: var(--weight-bold); }
+
+/* ---------- pomoc ---------- */
+
+.help {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.help h2 { margin: 0 0 6px; font-size: 20px; text-transform: var(--caps); font-weight: var(--weight-bold); }
+.help h3 { margin: 0 0 8px; font-size: 15px; text-transform: var(--caps); font-weight: var(--weight-bold); }
+.help p { margin: 0 0 8px; }
+.help p:last-child { margin-bottom: 0; }
+.help ul, .help ol { margin: 0 0 8px; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.help section, .help-intro {
+  background: var(--panel);
+  border: var(--bw) solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px;
+  scroll-margin-top: 8px;
+}
+.help-toc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.help-toc a {
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+  text-decoration: none;
+  border: var(--bw-thin) solid var(--line);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  background: var(--panel-2);
+}
+.help-toc a:hover { background: var(--accent); color: var(--on-accent); }
+.help-terms { margin: 0; display: grid; grid-template-columns: minmax(110px, 190px) 1fr; gap: 6px 14px; }
+.help-terms dt { font-weight: var(--weight-bold); }
+.help-terms dd { margin: 0; }
+.help-example {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.help-keys { border-collapse: collapse; width: 100%; }
+.help-keys td { padding: 5px 8px; border-bottom: var(--bw-thin) dashed var(--line); vertical-align: top; }
+.help-keys td:first-child { white-space: nowrap; width: 1%; }
+.help-back { display: flex; justify-content: center; }
+.first-run { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; }
+.first-run p { margin: 0; }
