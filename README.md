@@ -133,14 +133,13 @@ rozróżnia „model myśli" od „model pisze" — sam licznik znaków niczego 
 
 ## Skórki
 
-Osiem motywów, przełącznik na dole panelu bocznego; wybór zapamiętuje się między uruchomieniami
+Siedem motywów, przełącznik na dole panelu bocznego; wybór zapamiętuje się między uruchomieniami
 (`localStorage`, z awaryjnym powrotem do domyślnego, gdy magazyn przeglądarki zawiedzie).
 
 | skórka | charakter |
 |---|---|
 | **Neo-brutal** (domyślna) | twarde krawędzie, lity czarny cień, wersaliki |
 | **Matrix** | czarne tło, zielony fosfor, monospace, poświata zamiast cienia |
-| **Garden** | kwiatowe pastele — róż, bez, masło; krój szeryfowy, miękkie zaokrąglenia |
 | **Apple** | jasnoszary minimalizm, cienkie linie, delikatne cienie |
 | **Pony** | pastele, grube zaokrąglenia, różowy cień |
 | **Nord** | chłodny grafit, przygaszony błękit — spokojny motyw ciemny |

@@ -14,7 +14,6 @@ const AUTOSAVE_MS = 2000;
 const SKORKI = [
   { id: 'brutal', nazwa: 'Neo-brutal' },
   { id: 'matrix', nazwa: 'Matrix' },
-  { id: 'garden', nazwa: 'Garden' },
   { id: 'apple', nazwa: 'Apple' },
   { id: 'pony', nazwa: 'Pony' },
   { id: 'nord', nazwa: 'Nord' },

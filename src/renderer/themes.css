@@ -79,43 +79,6 @@
   --track: 0.08em;
 }
 
-/* ---------- garden: płatki, nie liście — róż, bez, masło, zieleń jako akcent ---------- */
-
-:root[data-theme='garden'] {
-  --bg: #fdf6f2;
-  --bg-image: radial-gradient(circle at 12% 18%, rgba(242, 162, 184, 0.34) 0, transparent 40%),
-    radial-gradient(circle at 82% 14%, rgba(197, 170, 222, 0.32) 0, transparent 38%),
-    radial-gradient(circle at 70% 82%, rgba(255, 214, 122, 0.28) 0, transparent 40%),
-    radial-gradient(circle at 25% 88%, rgba(140, 180, 120, 0.22) 0, transparent 36%);
-  --panel: #fffbf8;
-  --panel-2: #fbeef2;
-  --ink: #43303a;
-  --line: #e0bccb;
-  --muted: #8a6f7c;
-  --accent: #f2a2b8;
-  --on-accent: #40222e;
-  --accent-2: #8bb273;
-  --on-accent-2: #1f2c18;
-  --ok: #6fa86a;
-  --warn: #e8a33d;
-  --bad: #c4566b;
-  --on-bad: #ffffff;
-
-  --bw: 1px;
-  --bw-thin: 1px;
-  --radius: 14px;
-  --shadow: 0 6px 18px rgba(150, 90, 115, 0.16);
-  --shadow-sm: 0 3px 10px rgba(150, 90, 115, 0.13);
-  --press: translateY(1px);
-
-  --font: 14px/1.6 "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-  --mono: "Cascadia Mono", Consolas, monospace;
-  --weight-normal: 400;
-  --weight-bold: 600;
-  --caps: none;
-  --track: 0.01em;
-}
-
 /* ---------- apple: jasno, cicho, minimalnie ---------- */
 
 :root[data-theme='apple'] {
