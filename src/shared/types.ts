@@ -56,6 +56,11 @@ export interface AuditResult {
   gaps: AuditGap[];
   questions: string[];
   finalPrompt: string;
+  /**
+   * Ustawione, gdy aplikacja odrzuciła wersję audytora i zostawiła szkic pisarza —
+   * np. model oddał wyraźnie krótszy, urwany tekst. Interfejs to pokazuje.
+   */
+  keptDraft?: string;
 }
 
 export interface QA {
@@ -66,11 +71,20 @@ export interface QA {
 /** Dostawcy mówiący konwencją OpenAI — jeden klient, różne adresy. */
 export type ChatProvider = 'openai' | 'gemini' | 'openrouter';
 
-/** „api" to Anthropic z własnym klientem, „cli" to program lokalny bez klucza. */
-export type ProviderMode = 'api' | ChatProvider | 'cli';
+/**
+ * „api" to Anthropic z własnym klientem, „cli" to program lokalny bez klucza,
+ * „custom" to własny serwer zgodny z OpenAI — Ollama, LM Studio, vLLM na prywatnej maszynie.
+ */
+export type ProviderMode = 'api' | ChatProvider | 'custom' | 'cli';
 
-/** Tryby wymagające klucza. CLI ma własne logowanie. */
-export type KeyedMode = 'api' | ChatProvider;
+/** Tryby z kluczem. Przy własnym serwerze klucz jest opcjonalny — Ollama go nie wymaga. */
+export type KeyedMode = 'api' | ChatProvider | 'custom';
+
+export interface CustomServer {
+  /** Adres bazowy, np. http://localhost:11434/v1. */
+  baseUrl: string;
+  model: string;
+}
 
 export interface ProviderConfig {
   mode: ProviderMode;
@@ -78,6 +92,14 @@ export interface ProviderConfig {
   cliArgs: string[];
   /** Nazwa modelu osobno dla każdego dostawcy — przełączenie nie kasuje poprzedniego wyboru. */
   models: Record<ChatProvider, string>;
+  custom: CustomServer;
+}
+
+/** Wynik sprawdzenia własnego serwera: lista modeli albo powód, dla którego się nie udało. */
+export interface ServerCheck {
+  ok: boolean;
+  models: string[];
+  error: string | null;
 }
 
 /** Opis dostawcy pokazywany w interfejsie; źródłem jest tabela w procesie głównym. */
@@ -95,6 +117,8 @@ export interface AgentsApi {
   getConfig(): Promise<ProviderConfig>;
   setConfig(config: ProviderConfig): Promise<void>;
   listProviders(): Promise<ProviderInfo[]>;
+  /** Łączy się z własnym serwerem i pobiera listę modeli — przy okazji sprawdza, czy serwer odpowiada. */
+  checkServer(baseUrl: string): Promise<ServerCheck>;
   write(task: string, answers: QA[]): Promise<WriterResult>;
   audit(task: string, draft: string, answers: QA[]): Promise<AuditResult>;
   /** Nasłuch postępu pracy agenta. Zwraca funkcję odpinającą. */

@@ -5,8 +5,10 @@ import type {
   ProviderConfig,
   ProviderInfo,
   QA,
+  ServerCheck,
   WriterResult,
 } from '../shared/types';
+import { isInsecureRemote, isLocalHost, LOCAL_PRESETS, normalizeBaseUrl } from '../shared/endpoint';
 
 interface Props {
   families: PromptFamily[];
@@ -33,6 +35,8 @@ export default function Creator({ families, onSaved }: Props) {
   const [target, setTarget] = useState('');
   const [newFamily, setNewFamily] = useState('');
   const [saved, setSaved] = useState<string | null>(null);
+  const [serverCheck, setServerCheck] = useState<ServerCheck | null>(null);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -40,8 +44,25 @@ export default function Creator({ families, onSaved }: Props) {
       setConfig(cfg);
       setProviders(await window.agents.listProviders());
       if (cfg.mode !== 'cli') setHasKey(await window.agents.hasApiKey(cfg.mode));
+      if (cfg.mode === 'custom') void checkServer(cfg.custom.baseUrl);
     })();
   }, []);
+
+  /** Sprawdza serwer i przy okazji pobiera listę modeli do wybrania kliknięciem. */
+  async function checkServer(baseUrl: string) {
+    setChecking(true);
+    try {
+      setServerCheck(await window.agents.checkServer(baseUrl));
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  function setCustom(next: Partial<ProviderConfig['custom']>) {
+    if (!config) return;
+    if (next.baseUrl !== undefined) setServerCheck(null);
+    void saveConfig({ ...config, custom: { ...config.custom, ...next } });
+  }
 
   /* Licznik: praca trwa i tak dziesiątki sekund, więc liczy się każdy dowód, że coś się dzieje. */
   useEffect(() => {
@@ -61,6 +82,7 @@ export default function Creator({ families, onSaved }: Props) {
     setKeyInput('');
     await saveConfig({ ...config, mode });
     setHasKey(mode === 'cli' ? null : await window.agents.hasApiKey(mode));
+    if (mode === 'custom') void checkServer(config.custom.baseUrl);
   }
 
   async function saveKey() {
@@ -96,7 +118,7 @@ export default function Creator({ families, onSaved }: Props) {
    * CLI: tylko polecenie, bo logowanie ma już program, który autor uruchamia.
    */
   /** Opis aktywnego dostawcy konwencji OpenAI; null, gdy wybrany jest Anthropic albo CLI. */
-  const spec = config && config.mode !== 'api' && config.mode !== 'cli'
+  const spec = config && config.mode !== 'api' && config.mode !== 'cli' && config.mode !== 'custom'
     ? providers.find((p) => p.id === config.mode) ?? null
     : null;
 
@@ -107,7 +129,10 @@ export default function Creator({ families, onSaved }: Props) {
     ? false
     : config.mode === 'cli'
       ? Boolean(config.cliCommand.trim())
-      : config.mode === 'api'
+      : config.mode === 'custom'
+        ? // Klucz przy własnym serwerze jest opcjonalny — wystarczy poprawny adres i model.
+          Boolean(normalizeBaseUrl(config.custom.baseUrl) && config.custom.model.trim())
+        : config.mode === 'api'
         ? hasKey === true
         : hasKey === true && Boolean((config.models[config.mode] || '').trim());
 
@@ -188,6 +213,12 @@ export default function Creator({ families, onSaved }: Props) {
           </button>
         ))}
         <button
+          className={config.mode === 'custom' ? 'tab active' : 'tab'}
+          onClick={() => void switchMode('custom')}
+        >
+          Własny serwer
+        </button>
+        <button
           className={config.mode === 'cli' ? 'tab active' : 'tab'}
           onClick={() => void switchMode('cli')}
         >
@@ -195,7 +226,100 @@ export default function Creator({ families, onSaved }: Props) {
         </button>
       </div>
 
-      {config.mode !== 'cli' ? (
+      {config.mode === 'custom' ? (
+        <>
+          <p className="hint">
+            Model na serwerze, który stawiasz sam — Ollama albo LM Studio na tym komputerze, vLLM czy llama.cpp
+            na prywatnej maszynie. Wystarczy, że serwer mówi konwencją OpenAI (<code>/v1/chat/completions</code>).
+            {isLocalHost(config.custom.baseUrl) && ' Serwer jest na tym komputerze — prompty nie wychodzą do sieci.'}
+          </p>
+          <div className="save-row">
+            <input
+              value={config.custom.baseUrl}
+              placeholder="Adres serwera, np. http://localhost:11434/v1"
+              onChange={(e) => setCustom({ baseUrl: e.target.value })}
+            />
+            {LOCAL_PRESETS.map((p) => (
+              <button key={p.label} className="ghost" onClick={() => setCustom({ baseUrl: p.baseUrl })}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {!normalizeBaseUrl(config.custom.baseUrl) && config.custom.baseUrl.trim() && (
+            <p className="error">To nie jest poprawny adres http(s).</p>
+          )}
+          {isInsecureRemote(config.custom.baseUrl) && (
+            <p className="hint warn">
+              Adres zaczyna się od http:// i prowadzi do innej maszyny — prompty i klucz pójdą przez sieć
+              niezaszyfrowane. Jeśli serwer to umożliwia, użyj https://.
+            </p>
+          )}
+
+          <div className="save-row">
+            <input
+              value={config.custom.model}
+              placeholder="Model, np. qwen3:32b — albo wybierz z listy poniżej"
+              onChange={(e) => setCustom({ model: e.target.value })}
+            />
+            <button onClick={() => void checkServer(config.custom.baseUrl)} disabled={checking}>
+              {checking ? 'Sprawdzam…' : 'Sprawdź połączenie'}
+            </button>
+          </div>
+          {serverCheck &&
+            (serverCheck.ok ? (
+              <>
+                <p className="ok">
+                  Serwer odpowiada.{' '}
+                  {serverCheck.models.length === 0
+                    ? 'Nie ma na nim żadnego modelu — w Ollamie pobierzesz go poleceniem „ollama pull nazwa”.'
+                    : `Modele: ${serverCheck.models.length} — kliknij, żeby wybrać.`}
+                </p>
+                {serverCheck.models.length > 0 && (
+                  <div className="model-pick">
+                    {serverCheck.models.map((m) => (
+                      <button
+                        key={m}
+                        className={m === config.custom.model ? 'tab active' : 'tab'}
+                        onClick={() => setCustom({ model: m })}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="error">{serverCheck.error}</p>
+            ))}
+
+          <p className="hint">
+            Wielkość modelu ma znaczenie: kreator wymaga odpowiedzi w ściśle określonym formacie. Modele rzędu 7–8 mld
+            parametrów często go gubią; sensowne wyniki zaczynają się od ok. 14 mld, dobre od ok. 30 mld. Modele do
+            osadzeń (embeddingi) i do OCR się tu nie nadają.
+          </p>
+
+          <p className="hint">
+            Klucz — tylko jeśli serwer go wymaga (Ollama i LM Studio lokalnie nie wymagają).{' '}
+            {hasKey ? 'Klucz jest zapisany.' : ''}
+          </p>
+          <div className="save-row">
+            <input
+              type="password"
+              value={keyInput}
+              placeholder={hasKey ? 'Nowy klucz (nadpisze stary)' : 'Klucz serwera (opcjonalnie)'}
+              onChange={(e) => setKeyInput(e.target.value)}
+            />
+            <button onClick={() => void saveKey()} disabled={!keyInput.trim()}>
+              Zapisz klucz
+            </button>
+            {hasKey && (
+              <button className="ghost" onClick={() => void dropKey()}>
+                Usuń klucz
+              </button>
+            )}
+          </div>
+        </>
+      ) : config.mode !== 'cli' ? (
         <>
           <p className="hint">
             {spec
@@ -281,7 +405,8 @@ export default function Creator({ families, onSaved }: Props) {
         <h2>Kreator promptu</h2>
         <p className="muted">
           Kreator to jedyna część aplikacji, która sięga po model. Katalog działa bez niego w całości.
-          Wybierz drogę: klucz jednego z dostawców albo lokalne CLI, które już masz zalogowane.
+          Wybierz drogę: klucz jednego z dostawców, własny serwer (np. Ollama na tym komputerze) albo lokalne
+          CLI, które już masz zalogowane.
         </p>
         {settingsPanel}
         {error && <p className="error">{error}</p>}
@@ -305,7 +430,9 @@ export default function Creator({ families, onSaved }: Props) {
             <span className="chip-value">
               {config?.mode === 'cli'
                 ? config.cliCommand
-                : spec
+                : config?.mode === 'custom'
+                  ? config.custom.model || 'nie wybrano'
+                  : spec
                   ? config?.models[spec.id] || 'nie wybrano'
                   : 'claude-opus-5'}
             </span>
@@ -384,6 +511,7 @@ export default function Creator({ families, onSaved }: Props) {
           )}
 
           <p className="section">Prompt finalny</p>
+          {audit.keptDraft && <p className="hint warn">{audit.keptDraft}</p>}
           <textarea className="result" value={audit.finalPrompt} readOnly />
 
           {(audit.gaps.length > 0 || (writer?.rulesCovered.length ?? 0) > 0) && (

@@ -32,6 +32,7 @@ const agents: AgentsApi = {
   clearApiKey: (mode) => ipcRenderer.invoke('agents:clearApiKey', mode),
   getConfig: () => ipcRenderer.invoke('agents:getConfig'),
   listProviders: () => ipcRenderer.invoke('agents:listProviders'),
+  checkServer: (baseUrl) => ipcRenderer.invoke('agents:checkServer', baseUrl),
   setConfig: (config) => ipcRenderer.invoke('agents:setConfig', config),
   write: (task: string, answers: QA[]) => ipcRenderer.invoke('agents:write', task, answers),
   audit: (task: string, draft: string, answers: QA[]) =>

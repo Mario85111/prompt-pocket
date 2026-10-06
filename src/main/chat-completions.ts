@@ -24,13 +24,22 @@ export interface ChatRequest {
   headers?: Record<string, string>;
   /** Dostaje łączną liczbę znaków odebranych do tej pory — po to, by pokazać, że model pisze. */
   onChunk?: (chars: number) => void;
+  /** Limit na całą odpowiedź. Model lokalny na zwykłym komputerze potrzebuje więcej niż chmura. */
+  timeoutMs?: number;
+}
+
+/** Nagłówek uwierzytelnienia tylko wtedy, gdy jest klucz — pusty „Bearer " część serwerów odrzuca. */
+function authHeaders(apiKey: string): Record<string, string> {
+  return apiKey.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : {};
 }
 
 export async function runChatCompletion(req: ChatRequest): Promise<string> {
   const { provider, endpoint, apiKey, model, system, user, headers = {}, onChunk } = req;
+  const timeoutMs = req.timeoutMs ?? TIMEOUT_MS;
+  const minutes = Math.round(timeoutMs / 60_000);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
   try {
@@ -38,7 +47,7 @@ export async function runChatCompletion(req: ChatRequest): Promise<string> {
       method: 'POST',
       signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        ...authHeaders(apiKey),
         'Content-Type': 'application/json',
         ...headers,
       },
@@ -55,7 +64,7 @@ export async function runChatCompletion(req: ChatRequest): Promise<string> {
   } catch (err) {
     clearTimeout(timer);
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error(`${provider} nie odpowiedział w ciągu 5 minut.`);
+      throw new Error(`${provider} nie odpowiedział w ciągu ${minutes} min.`);
     }
     throw new Error(`Brak połączenia z ${provider}. Katalog działa dalej bez sieci.`);
   }
@@ -81,7 +90,7 @@ export async function runChatCompletion(req: ChatRequest): Promise<string> {
     // Limit czasu może wypaść także w środku czytania strumienia. Bez tego użytkownik
     // dostawał surowe „This operation was aborted" zamiast informacji, co się stało.
     if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('aborted'))) {
-      throw new Error(`${provider} przestał odpowiadać w trakcie pisania (limit 5 minut).`);
+      throw new Error(`${provider} przestał odpowiadać w trakcie pisania (limit ${minutes} min).`);
     }
     throw err;
   }
@@ -174,4 +183,47 @@ function errorMessage(body: string): string {
     /* ciało nie jest JSON-em */
   }
   return body.slice(0, 300) || '(puste ciało odpowiedzi)';
+}
+
+/* ---------- lista modeli (własny serwer) ---------- */
+
+const LIST_TIMEOUT_MS = 8000;
+
+/**
+ * `GET …/models` — standard OpenAI, który mają Ollama, LM Studio, vLLM i llama.cpp.
+ * Służy podwójnie: podpowiada nazwy modeli i sprawdza, czy serwer w ogóle odpowiada.
+ */
+export async function listModels(url: string, apiKey: string): Promise<string[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LIST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(url, { headers: authHeaders(apiKey), signal: controller.signal });
+  } catch (err) {
+    throw new Error(
+      err instanceof Error && err.name === 'AbortError'
+        ? 'Serwer nie odpowiedział w ciągu 8 sekund.'
+        : 'Nie da się połączyć z serwerem. Sprawdź adres i czy serwer działa.'
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(`Serwer odmówił dostępu (${response.status}) — potrzebny klucz albo klucz jest zły.`);
+  }
+  if (!response.ok) throw new Error(`Serwer odpowiedział błędem ${response.status}: ${errorMessage(await response.text())}`);
+
+  let payload: { data?: { id?: unknown }[] };
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch {
+    throw new Error('Pod tym adresem odpowiada coś, co nie jest serwerem modeli zgodnym z OpenAI.');
+  }
+  if (!Array.isArray(payload.data)) {
+    throw new Error('Pod tym adresem odpowiada coś, co nie jest serwerem modeli zgodnym z OpenAI.');
+  }
+  return payload.data
+    .map((m) => (typeof m.id === 'string' ? m.id : ''))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
 }

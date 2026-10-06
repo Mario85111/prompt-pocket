@@ -23,6 +23,7 @@ const ENV_VAR: Record<KeyedMode, string> = {
   openai: PROVIDERS.openai.envVar,
   gemini: PROVIDERS.gemini.envVar,
   openrouter: PROVIDERS.openrouter.envVar,
+  custom: 'PROMPT_POCKET_CUSTOM_API_KEY',
 };
 
 function keyFile(mode: KeyedMode): string {
@@ -51,10 +52,29 @@ const DEFAULT_CONFIG: ProviderConfig = {
     gemini: 'gemini-3.8-flash',
     openrouter: 'openai/gpt-6-sol',
   },
+  // Najczęstszy przypadek własnego serwera to Ollama na tym samym komputerze.
+  custom: { baseUrl: 'http://localhost:11434/v1', model: '' },
 };
 
 function isMode(value: unknown): value is ProviderMode {
-  return value === 'api' || value === 'openai' || value === 'gemini' || value === 'openrouter' || value === 'cli';
+  return (
+    value === 'api' ||
+    value === 'openai' ||
+    value === 'gemini' ||
+    value === 'openrouter' ||
+    value === 'custom' ||
+    value === 'cli'
+  );
+}
+
+/** Plik konfiguracji sprzed własnego serwera nie ma tego pola — wtedy wartości domyślne. */
+function readCustom(parsed: Record<string, unknown>): ProviderConfig['custom'] {
+  const raw = (parsed.custom ?? {}) as Record<string, unknown>;
+  return {
+    baseUrl:
+      typeof raw.baseUrl === 'string' && raw.baseUrl.trim() ? raw.baseUrl.trim() : DEFAULT_CONFIG.custom.baseUrl,
+    model: typeof raw.model === 'string' ? raw.model.trim() : '',
+  };
 }
 
 function readModels(parsed: Record<string, unknown>): ProviderConfig['models'] {
@@ -80,6 +100,7 @@ export async function getConfig(): Promise<ProviderConfig> {
           : DEFAULT_CONFIG.cliCommand,
       cliArgs: Array.isArray(parsed.cliArgs) ? parsed.cliArgs.map(String) : DEFAULT_CONFIG.cliArgs,
       models: readModels(parsed as Record<string, unknown>),
+      custom: readCustom(parsed as Record<string, unknown>),
     };
   } catch {
     return DEFAULT_CONFIG;
@@ -95,6 +116,10 @@ export async function setConfig(config: ProviderConfig): Promise<void> {
       openai: (config.models.openai || '').trim(),
       gemini: (config.models.gemini || '').trim(),
       openrouter: (config.models.openrouter || '').trim(),
+    },
+    custom: {
+      baseUrl: (config.custom?.baseUrl || '').trim() || DEFAULT_CONFIG.custom.baseUrl,
+      model: (config.custom?.model || '').trim(),
     },
   };
   await fs.writeFile(configFile(), JSON.stringify(clean, null, 2), 'utf8');

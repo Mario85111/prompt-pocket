@@ -809,3 +809,8 @@ kbd {
 .help-back { display: flex; justify-content: center; }
 .first-run { display: flex; flex-direction: column; gap: 4px; align-items: center; text-align: center; }
 .first-run p { margin: 0; }
+
+/* ---------- kreator: lista modeli z własnego serwera ---------- */
+
+.model-pick { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; }
+.model-pick .tab { flex: none; font-size: 11px; padding: 4px 8px; text-transform: none; font-family: var(--mono); }

@@ -420,6 +420,7 @@ app.whenReady().then(async () => {
     }))
   );
   ipcMain.handle('agents:setConfig', (_e, config: settings.ProviderConfig) => settings.setConfig(config));
+  ipcMain.handle('agents:checkServer', (_e, baseUrl: string) => agents.checkServer(baseUrl));
   /** Postęp wraca do tego okna, które zleciło pracę — inaczej licznik trafiłby w próżnię. */
   const progress = (event: Electron.IpcMainInvokeEvent, phase: 'pisarz' | 'audytor') => (chars: number) => {
     if (!event.sender.isDestroyed()) event.sender.send('agents:progress', { phase, chars });

@@ -79,7 +79,7 @@ Dwa przebiegi, jeden po drugim:
 Wynik zapisujesz do rodziny, którą **wskazujesz sam** — do istniejącej (powstaje wersja pod tą oznaczoną
 jako działająca) albo do nowej. Aplikacja nadal nie zgaduje przynależności.
 
-### Skąd bierzemy model — pięć dróg do wyboru
+### Skąd bierzemy model — sześć dróg do wyboru
 
 | droga | jak działa | czego wymaga |
 |---|---|---|
@@ -87,6 +87,7 @@ jako działająca) albo do nowej. Aplikacja nadal nie zgaduje przynależności.
 | **OpenAI** | konwencja OpenAI | klucz z platform.openai.com albo `OPENAI_API_KEY` **oraz** nazwa modelu |
 | **Gemini** | konwencja OpenAI (endpoint zgodności Google) | klucz z aistudio.google.com albo `GEMINI_API_KEY` **oraz** nazwa modelu |
 | **OpenRouter** | konwencja OpenAI | klucz z openrouter.ai albo `OPENROUTER_API_KEY` **oraz** slug modelu |
+| **Własny serwer** | konwencja OpenAI pod adresem, który podajesz — Ollama, LM Studio, vLLM, llama.cpp | adres serwera i model; klucz opcjonalny |
 | **Lokalne CLI** | rozmowę prowadzi program, który masz zainstalowany i zalogowany | polecenie w PATH lub pełna ścieżka |
 
 **Płatne konto ChatGPT to nie to samo co klucz API OpenAI.** Subskrypcja ChatGPT Plus/Pro działa wyłącznie
@@ -119,6 +120,35 @@ i walidowany tym samym schematem co odpowiedź z API.
 
 Model w trybie API: `claude-opus-5`, adaptacyjne myślenie, odpowiedzi w strukturze wymuszonej schematem.
 W trybie CLI o model decyduje wywoływany program.
+
+### Model lokalny i własny serwer
+
+Droga **Własny serwer** przyjmuje adres dowolnego serwera zgodnego z OpenAI (Ollama, LM Studio, vLLM,
+llama.cpp). Gdy pod adresem stoi **Ollama**, kreator rozpoznaje ją sam (`/api/version`) i rozmawia z nią
+jej natywnym API (`src/main/ollama.ts`), bo zgodny z OpenAI endpoint Ollamy ma dwie wady, które wyszły
+w pomiarze:
+
+- **kontekst 2048 tokenów** — tyle zajmuje sama instrukcja kreatora; nadmiar Ollama obcina po cichu.
+  Natywnie ustawiamy `num_ctx` 8192;
+- **brak wymuszenia formatu** — natywnie przekazujemy schemat JSON, który Ollama wymusza gramatyką
+  przy generowaniu. Po odpowiedziach autora schemat dopuszcza tylko status „gotowe" i niepusty prompt,
+  bo małe modele zamiast pisać zadawały kolejne pytania.
+
+Niezależnie od drogi: gdy wersja finalna audytora jest krótsza niż 60% szkicu pisarza, kreator uznaje ją
+za urwaną, zostawia szkic i mówi o tym (`src/shared/audit-guard.ts`).
+
+Zmierzone 2026-10-06 na laptopie Ryzen 7 4700U, 32 GB RAM, bez karty graficznej (100% CPU), jedno zadanie
+(„ustalenia z notatki ze spotkania"), jedna runda pytań:
+
+| model | zgodny z OpenAI, kontekst 2048 | natywnie, bez wymuszenia „gotowe" | natywnie, wersja obecna |
+|---|---|---|---|
+| OpenEuroLLM-Polish (Gemma 3, 12B) | **błąd formatu** (304 s) | format OK, ale **pytał dalej — brak promptu** | prompt dobry; wersja audytora urwana → **złapana przez zabezpieczenie**; 961 s |
+| gemma3:4b | przeszedł, pytał dalej (216 s) | pytał dalej (303 s) | prompt w 271 s, ale **myli format** (JSON zamiast żądanego Markdowna), audytor tego nie złapał |
+
+Wniosek: na tym sprzęcie model lokalny **działa**, ale jest wolny (4–16 min na przebieg), a jakość
+z modeli 4–12B wymaga przeczytania wyniku przed zapisaniem. Do codziennej pracy lepszy będzie model
+≥ 14B na komputerze z kartą graficzną albo serwer, który go udźwignie. Jedno zadanie to za mało na
+ranking — to próba działania drogi, nie porównanie modeli.
 
 ### Postęp pracy agenta
 
@@ -159,7 +189,7 @@ Dodanie skórki to jeden blok zmiennych plus wpis na liście w `App.tsx`.
 npm test
 ```
 
-131 testów w 11 plikach, wszystkie bez sieci: dostawcy podmieniani na lokalne atrapy HTTP, magazyn
+183 testy w 14 plikach, wszystkie bez sieci: dostawcy podmieniani na lokalne atrapy HTTP, magazyn
 plikowy pracuje na katalogu tymczasowym. Testy działają na skompilowanym procesie głównym,
 więc `npm test` najpierw go buduje.
 
@@ -172,6 +202,9 @@ więc `npm test` najpierw go buduje.
 | `cli-test.js`, `promptfile-test.js` | tryb CLI: stdin, `{promptFile}`, błędy |
 | `or-test.js`, `providers-test.js` | trzej dostawcy konwencji OpenAI, nagłówki, błędy |
 | `stream-test.js` | strumień SSE, brak strumienia, błąd w środku |
+| `ollama-test.js` | natywne API Ollamy: wykrywanie, `num_ctx` i schemat w żądaniu, strumień NDJSON, błędy |
+| `guard-test.js` | zabezpieczenie przed urwaną wersją finalną audytora |
+| `custom-test.js` | własny serwer: normalizacja adresu, ostrzeżenie http, klucz opcjonalny, lista modeli, błędy |
 | `features-test.js` | notatka (nowe linie, cudzysłowy), data użycia i kolejność, zmienne, porównanie, kopia zapasowa i rotacja |
 
 ## Zmierzone
@@ -180,13 +213,15 @@ więc `npm test` najpierw go buduje.
 |---|---|
 | zimny skan 1000 wersji z dysku | 387 ms |
 | wyszukiwanie przy 1000 wersjach | 1–2 ms (wymóg: <1 s) |
-| cały zestaw testów | 131/131 PASS |
+| cały zestaw testów | 183/183 PASS |
 | instalator | 79 MB, niepodpisany |
 | porównanie modeli (4 zadania × 5 modeli × 2 sędziów) | 22 przebiegi, 74 min, $2,40 |
 
 ## Znane ograniczenia
 
-- **Na żywo sprawdzona jest tylko droga przez OpenRouter** — za to gruntownie: 22 przebiegi pełnej
+- **Własny serwer sprawdzony na żywo z Ollamą** (dwa modele lokalne, wyniki wyżej). LM Studio, vLLM i
+  llama.cpp — tylko na atrapie serwera.
+- **Na żywo sprawdzona jest droga przez OpenRouter** — za to gruntownie: 22 przebiegi pełnej
   ścieżki kreatora na pięciu modelach ([porownanie-modeli-wnioski.md](porownanie-modeli-wnioski.md)).
   Anthropic (własny klient SDK), OpenAI i Gemini bezpośrednio oraz CLI mają wyłącznie testy na
   atrapach — pierwsza rozmowa z prawdziwym modelem tymi drogami jest testem, nie formalnością.

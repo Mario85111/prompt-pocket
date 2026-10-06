@@ -148,7 +148,14 @@ export default function Help({ root, onGoToCatalog }: { root: string; onGoToCata
         </ul>
         <p>
           Gotowy prompt zapisujesz do wskazanej przez siebie rodziny albo do nowej. To jedyne miejsce w aplikacji,
-          które łączy się z internetem.
+          które może łączyć się z internetem — a z modelem lokalnym nie łączy się wcale.
+        </p>
+        <p>
+          <b>Model lokalny albo własny serwer</b> (Ollama, LM Studio, vLLM): <b>Model → Własny serwer</b>, kliknij{' '}
+          <b>Ollama</b> (albo wpisz adres swojego serwera), potem <b>Sprawdź połączenie</b> i wybierz model z listy.
+          Klucz nie jest potrzebny. Prompty nie opuszczają wtedy komputera, ale wynik zależy od wielkości modelu: małe
+          modele (kilka mld parametrów) często psują wymagany format i kreator zgłasza błąd — sensowne wyniki zaczynają
+          się od ok. 14 mld parametrów. Na komputerze bez mocnej karty graficznej jeden przebieg trwa kilka minut.
         </p>
         <p className="hint">
           Kreator potrzebuje modelu AI. Kliknij <b>Model</b> w prawym górnym rogu Kreatora, wybierz dostawcę i wklej

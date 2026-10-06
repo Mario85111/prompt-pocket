@@ -17,9 +17,13 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
 import { getConfig, readApiKey } from './settings';
 import { extractJson, FormatError, runCli } from './cli';
+import { listModels, runChatCompletion } from './chat-completions';
+import { isOllama, runOllamaChat } from './ollama';
+import { guardFinalPrompt } from '../shared/audit-guard';
 import { runChatProvider } from './openrouter';
 import { PROVIDERS } from './providers';
-import type { AuditResult, ChatProvider, QA, WriterResult } from '../shared/types';
+import { chatCompletionsUrl, isLocalHost, modelsUrl, nativeRoot, normalizeBaseUrl } from '../shared/endpoint';
+import type { AuditResult, ChatProvider, QA, ServerCheck, WriterResult } from '../shared/types';
 
 const MODEL = 'claude-opus-5';
 
@@ -44,6 +48,20 @@ const WriterSchema = z.object({
     .array(z.string())
     .describe('Które z pięciu zasad zostały pokryte i czym; po jednej krótkiej linii'),
 });
+
+/**
+ * Pisarz po odpowiedziach autora — tylko dla drogi, która wymusza schemat przy generowaniu (Ollama).
+ *
+ * Zmierzone na modelach lokalnych 4B i 12B: po otrzymaniu odpowiedzi zamiast pisać prompt zadawały
+ * kolejne, nowe pytania, a 12B nie oddał promptu wcale. Instrukcja „gdy autor odpowiedział, pisz"
+ * była, małe modele jej nie słuchają. Schemat, w którym „pytania" w ogóle nie są dozwolone,
+ * a prompt nie może być pusty, zamyka tę pętlę. Modele w chmurze tego problemu nie miały
+ * (22 przebiegi porównania) i dostają zwykły schemat.
+ */
+const WriterFinalSchema = WriterSchema.extend({
+  status: z.literal('gotowe').describe('Autor odpowiedział na pytania — teraz piszesz prompt'),
+  prompt: z.string().min(1).describe('Gotowy prompt'),
+}) as unknown as z.ZodType<z.infer<typeof WriterSchema>>;
 
 const AuditSchema = z.object({
   verdict: z.enum(['bez_zastrzezen', 'luki']).describe('Werdykt audytu'),
@@ -244,6 +262,85 @@ async function viaChatProvider<T>(
   });
 }
 
+/* ---------- droga 4: własny serwer (Ollama, LM Studio, vLLM…) ---------- */
+
+/**
+ * Model lokalny na zwykłym komputerze — zwłaszcza na samym procesorze — pisze wolno,
+ * a pierwsze wywołanie dokłada jeszcze ładowanie modelu do pamięci. Stąd dłuższy limit.
+ */
+const CUSTOM_TIMEOUT_MS = 15 * 60 * 1000;
+
+async function viaCustom<T>(
+  system: string,
+  user: string,
+  schema: z.ZodType<T>,
+  shape: string,
+  onChunk?: OnChunk,
+  /** Ostrzejszy schemat dla Ollamy, która wymusza go przy generowaniu (patrz WriterFinalSchema). */
+  enforced?: z.ZodType<T>
+): Promise<T> {
+  const { custom } = await getConfig();
+  const endpoint = chatCompletionsUrl(custom.baseUrl);
+  if (!endpoint) throw new Error(`Adres serwera „${custom.baseUrl}" jest niepoprawny. Popraw go w ustawieniach kreatora.`);
+  if (!custom.model) throw new Error('Nie wybrano modelu na własnym serwerze. Wybierz go w ustawieniach kreatora.');
+  const apiKey = (await readApiKey('custom')) ?? '';
+  // Ollama dostaje własne API: większy kontekst i schemat wymuszany przy generowaniu (patrz ollama.ts).
+  const root = nativeRoot(custom.baseUrl);
+  const ollama = root ? await isOllama(root) : false;
+
+  return withFormatRetry(async () => {
+    let raw: string;
+    try {
+      raw =
+        ollama && root
+          ? await runOllamaChat({
+              origin: root,
+              model: custom.model,
+              system,
+              user: withFormatContract(user, shape),
+              schema: z.toJSONSchema(enforced ?? schema),
+              apiKey,
+              timeoutMs: CUSTOM_TIMEOUT_MS,
+              onChunk,
+            })
+          : await runChatCompletion({
+              provider: 'Serwer modelu',
+              endpoint,
+              apiKey,
+              model: custom.model,
+              system,
+              user: withFormatContract(user, shape),
+              onChunk,
+              timeoutMs: CUSTOM_TIMEOUT_MS,
+            });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Ogólny komunikat „katalog działa bez sieci" myli przy serwerze na tym samym komputerze.
+      if (message.startsWith('Brak połączenia')) {
+        throw new Error(
+          isLocalHost(custom.baseUrl)
+            ? `Nie ma połączenia z serwerem pod ${normalizeBaseUrl(custom.baseUrl)}. Czy Ollama (albo LM Studio) jest uruchomiona?`
+            : `Nie ma połączenia z serwerem pod ${normalizeBaseUrl(custom.baseUrl)}. Sprawdź adres i czy serwer działa.`
+        );
+      }
+      throw err;
+    }
+    return validate(`modelu ${custom.model}`, raw, ollama && enforced ? enforced : schema);
+  });
+}
+
+/** Sprawdza serwer i pobiera listę modeli — dla przycisku „Sprawdź połączenie". */
+export async function checkServer(baseUrl: string): Promise<ServerCheck> {
+  const url = modelsUrl(baseUrl);
+  if (!url) return { ok: false, models: [], error: 'To nie jest poprawny adres http(s).' };
+  try {
+    const models = await listModels(url, (await readApiKey('custom')) ?? '');
+    return { ok: true, models, error: null };
+  } catch (err) {
+    return { ok: false, models: [], error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 const WRITER_SHAPE = `{
   "status": "pytania" | "gotowe",
   "questions": ["pytanie do autora", ...],   // pusta tablica, gdy status to "gotowe"
@@ -273,17 +370,21 @@ async function dispatch<T>(
   user: string,
   schema: z.ZodType<T>,
   shape: string,
-  onChunk?: OnChunk
+  onChunk?: OnChunk,
+  enforced?: z.ZodType<T>
 ): Promise<T> {
   const { mode } = await getConfig();
   if (mode === 'cli') return viaCli(system, user, schema, shape, onChunk);
+  if (mode === 'custom') return viaCustom(system, user, schema, shape, onChunk, enforced);
   if (mode !== 'api') return viaChatProvider(mode, system, user, schema, shape, onChunk);
   return viaApi(system, user, schema);
 }
 
 /** Agent 1: pisze prompt albo dopytuje. */
 export async function writePrompt(task: string, answers: QA[], onChunk?: OnChunk): Promise<WriterResult> {
-  return dispatch(WRITER_SYSTEM, writerUser(task, answers), WriterSchema, WRITER_SHAPE, onChunk);
+  // Po jednej rundzie odpowiedzi pisarz ma pisać, nie dopytywać — tam, gdzie da się to wymusić.
+  const enforced = answers.length > 0 ? WriterFinalSchema : undefined;
+  return dispatch(WRITER_SYSTEM, writerUser(task, answers), WriterSchema, WRITER_SHAPE, onChunk, enforced);
 }
 
 /** Agent 2: audytuje wynik pierwszego i oddaje wersję finalną. */
@@ -293,7 +394,8 @@ export async function auditPrompt(
   answers: QA[],
   onChunk?: OnChunk
 ): Promise<AuditResult> {
-  return dispatch(AUDITOR_SYSTEM, auditorUser(task, draft, answers), AuditSchema, AUDIT_SHAPE, onChunk);
+  const result = await dispatch(AUDITOR_SYSTEM, auditorUser(task, draft, answers), AuditSchema, AUDIT_SHAPE, onChunk);
+  return guardFinalPrompt(draft, result);
 }
 
 /** Zamienia błąd na komunikat, który da się pokazać autorowi. */
