@@ -3,3 +3,10 @@ dist/
 dist-electron/
 release/
 *.log
+
+# Notatki robocze autora — zostają na dysku, nie trafiają do repozytorium
+SCOPE.md
+STAN-PROJEKTU.md
+intent/
+porownanie-modeli.md
+porownanie-modeli-wnioski.md

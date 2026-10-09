@@ -1,10 +1,7 @@
 # Prompt Pocket
 
-Aplikacja desktopowa do tworzenia i katalogowania promptów wg [SCOPE.md](SCOPE.md).
-Zrealizowane wszystkie MUST-y M-1…M-7 (katalog) oraz M2 (kreator: agent piszący + agent audytujący).
-
-Wchodzisz w projekt po przerwie? Zacznij od [STAN-PROJEKTU.md](STAN-PROJEKTU.md) — stan, decyzje
-i otwarte punkty w jednym miejscu.
+Aplikacja desktopowa do tworzenia i katalogowania promptów AI: wersje promptów w zwykłych plikach `.md`,
+szybkie szukanie z dowolnego programu i kreator z dwoma agentami (pisarz + audytor).
 
 Aplikacja ma trzy zakładki: **Katalog** — to, co zapisane; **Kreator** — budowanie nowego promptu z pomocą
 dwóch agentów; **Pomoc** — instrukcja dla użytkownika, wbudowana, bo instalator nie zawiera tego README
@@ -33,8 +30,8 @@ npm run dist
 
 `C:\Users\<użytkownik>\PromptPocket`
 
-SCOPE zakładał `Documents`, ale folder Dokumenty jest tu przekierowany do OneDrive, co łamie
-ograniczenie „dane nie opuszczają maszyny" (SCOPE §7). Wygrywa ograniczenie.
+Domyślnie byłby to folder Dokumenty, ale gdy jest przekierowany do OneDrive (synchronizacja z chmurą),
+łamałby to zasadę „dane nie opuszczają komputera" — wtedy katalog ląduje w profilu użytkownika.
 Ścieżkę nadpisuje zmienna `PROMPT_POCKET_ROOT`.
 
 Aplikacja startuje pusta — nie zawiera żadnych promptów ani przykładów, a nic nie dociąga ze starych lokalizacji.
@@ -96,7 +93,7 @@ Jedyna droga, przy której **wystarcza samo konto ChatGPT**, to tryb **Lokalne C
 przez „Sign in with ChatGPT" — w kreatorze jest na to gotowy przycisk (`codex exec`).
 
 **Domyślnie: OpenRouter z modelem `openai/gpt-6-sol`** — wybór z porównania na czterech zadaniach
-([porownanie-modeli-wnioski.md](porownanie-modeli-wnioski.md)): jakościowo w czołówce, a pracuje
+(5 modeli, 2 sędziów, 22 przebiegi): jakościowo w czołówce, a pracuje
 w ~20 s zamiast 58–77 s. Przełącznik jest w kreatorze; wybór zapisuje się w `provider.json`
 w danych aplikacji.
 Każdy dostawca ma własny plik z kluczem, więc przełączenie trybu nie każe wklejać klucza od nowa.
@@ -222,15 +219,15 @@ więc `npm test` najpierw go buduje.
 - **Własny serwer sprawdzony na żywo z Ollamą** (dwa modele lokalne, wyniki wyżej). LM Studio, vLLM i
   llama.cpp — tylko na atrapie serwera.
 - **Na żywo sprawdzona jest droga przez OpenRouter** — za to gruntownie: 22 przebiegi pełnej
-  ścieżki kreatora na pięciu modelach ([porownanie-modeli-wnioski.md](porownanie-modeli-wnioski.md)).
+  ścieżki kreatora na pięciu modelach.
   Anthropic (własny klient SDK), OpenAI i Gemini bezpośrednio oraz CLI mają wyłącznie testy na
   atrapach — pierwsza rozmowa z prawdziwym modelem tymi drogami jest testem, nie formalnością.
 - **Podgląd interfejsu w zwykłej przeglądarce nie działa dla kreatora** — poza Electronem nie istnieje
   most `window.agents`, więc komponent się wywraca. Katalog renderuje się poprawnie.
 - **Instalator nie jest podpisany** — Windows SmartScreen pokaże ostrzeżenie przy pierwszym uruchomieniu.
-  Świadomie zaakceptowane w SCOPE §9 na czas, gdy narzędzie służy tylko autorowi.
-- **Indeks w pamięci zamiast SQLite/FTS5** — odstępstwo od zablokowanego stacku, opisane i uzasadnione
-  w SCOPE §4, czeka na decyzję product ownera. Próg powrotu do SQLite: skan startowy powyżej ~1 s.
+  Świadomie zaakceptowane na czas, gdy narzędzie służy tylko autorowi.
+- **Indeks w pamięci zamiast SQLite/FTS5** — świadome uproszczenie: indeks odbudowuje się ze skanu
+  katalogu. Próg powrotu do SQLite/FTS5: skan startowy powyżej ~1 s (dziś 387 ms przy 1000 wersjach).
 - Brak tagów — świadomie: przy tej skali wystarcza wyszukiwanie po treści.
 
 ## Na co dzień: szybkie szukanie, zmienne, notatki, kopia
