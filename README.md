@@ -308,3 +308,7 @@ Potwierdzenie pokazuje proces główny, nie interfejs — nie da się usunąć n
 | `npm run dist` | instalator NSIS w `release/` |
 | `npm run typecheck` | TypeScript bez emisji, oba projekty |
 | `npm test` | kompiluje proces główny i uruchamia cały zestaw testów (`tests/`) |
+
+## Autor
+
+Mariusz Kałmuk, Otoro SI.

@@ -71,5 +71,5 @@
       "artifactName": "PromptPocket-${version}-linux-${arch}.${ext}"
     }
   },
-  "author": "Prompt Pocket"
+  "author": "Mariusz Kałmuk, Otoro SI"
 }
